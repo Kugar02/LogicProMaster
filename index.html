@@ -239,7 +239,7 @@ const BaccaratApp = (function() {
     // --- 1. 路單運算模組 (RoadMap Engine) ---
     const RoadMap = {
         buildBigRoad(history) {
-            let grid = [], curCol = -1, lastColor = null, tieCount = 0;
+            let grid = , curCol = -1, lastColor = null, tieCount = 0;
             history.forEach(res => {
                 if (res === 'T') {
                     if (curCol === -1) tieCount++;
@@ -247,7 +247,7 @@ const BaccaratApp = (function() {
                  else {
                     if (res !== lastColor) {
                         curCol++;
-                        grid[curCol] = [];
+                        grid[curCol] = ;
                         lastColor = res;
                     }
                     grid[curCol].push({ color: res === 'B' ? 'RED' : 'BLUE', ties: tieCount });
