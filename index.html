@@ -737,29 +737,70 @@ const BaccaratApp = (function() {
             UI.updateAll();
         },
         loadBatch(inputStr) {
-            if (!inputStr) return;
+            if (!inputStr || typeof inputStr !== 'string') return;
+
             let cleanStr = inputStr.toUpperCase().replace(/莊/g, 'B').replace(/閒/g, 'P').replace(/和/g, 'T');
-            let tokens = cleanStr.split(/,|\s|;|\|/);
+            // 修正正則切分，避免分割出空白字元
+            let tokens = cleanStr.split(/[\s,;\/]+/);
             let parsed = [];
+
             tokens.forEach(t => {
-                if (['B','P','T'].includes(t)) parsed.push(t);
-                else for (let c of t) if (['B','P','T'].includes(c)) parsed.push(c);
+                if (['B', 'P', 'T'].includes(t)) {
+                    parsed.push(t);
+                } else {
+                    for (let c of t) {
+                        if (['B', 'P', 'T'].includes(c)) parsed.push(c);
+                    }
+                }
             });
-            if (parsed.length + state.history.length > state.MAX_HANDS) return alert(`匯入將超過上限！`);
-            state.history = state.history.concat(parsed);
-            document.getElementById("batchInput").value = "";
-            UI.updateAll();
+
+            if (parsed.length === 0) {
+                alert("未檢測到有效的牌局格式（請輸入 B、P、T 或 莊、閒、和）");
+                return;
+            }
+
+            if (typeof state !== 'undefined' && state.history) {
+                const maxHands = state.MAX_HANDS || 72;
+                if (parsed.length + state.history.length > maxHands) {
+                    return alert(`匯入將超過上限！`);
+                }
+                state.history = state.history.concat(parsed);
+            }
+
+            const batchInputEl = document.getElementById("batchInput");
+            if (batchInputEl) batchInputEl.value = "";
+
+            if (typeof UI !== 'undefined' && UI.updateAll) UI.updateAll();
         }
     };
 })();
 
-window.recordResult = (res) => BaccaratApp.record(res);
-window.undoRecord = () => BaccaratApp.undo();
-window.clearRecords = () => BaccaratApp.clear();
-window.loadBatchInput = () => BaccaratApp.loadBatch(document.getElementById("batchInput").value.trim());
-window.handleKeyPress = (e) => { if (e.key === 'Enter') window.loadBatchInput(); };
+// 全局綁定與事件處理
+window.recordResult = (res) => { if (window.BaccaratApp?.record) BaccaratApp.record(res); };
+window.undoRecord = () => { if (window.BaccaratApp?.undo) BaccaratApp.undo(); };
+window.clearRecords = () => { if (window.BaccaratApp?.clear) BaccaratApp.clear(); };
 
-BaccaratApp.init();
+window.loadBatchInput = () => {
+    const batchInputEl = document.getElementById("batchInput");
+    if (!batchInputEl) return;
+    const val = batchInputEl.value.trim();
+    if (val && window.BaccaratApp?.loadBatch) {
+        BaccaratApp.loadBatch(val);
+    }
+};
+
+window.handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault(); // 防止 Enter 鍵重新整理頁面
+        window.loadBatchInput();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.BaccaratApp?.init) {
+        BaccaratApp.init();
+    }
+});
 </script>
 </body>
 </html>
