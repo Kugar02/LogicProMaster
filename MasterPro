@@ -1,4 +1,12 @@
-/**
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none';">
+    <title>百家樂多維路單分析與旗艦預測系統 (AI 10萬局模擬增強版)</title>
+    <style>
+       /**
  * 百家樂多維路單與 AI 預測核心引擎 (模組化優化版)
  * 包含：四大路單引擎、問路系統、12大AI權重邏輯
  */
@@ -401,3 +409,6 @@ window.handleKeyPress = (e) => { if (e.key === 'Enter') window.loadBatchInput();
 
 // 初始化系統啟動
 BaccaratApp.init();
+</script>
+</body>
+</html>
