@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none';">
-    <title>百家樂多維路單分析與旗艦預測系統 (AI 10萬局模擬增強版)</title>
+    <title>百家樂多維路單分析與旗艦預測系統 (12邏輯反打增強版)</title>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -25,6 +25,7 @@
             --signal-weak: #34d399;
             --signal-mid: #fbbf24;
             --signal-strong: #f87171;
+            --counter-color: #f43f5e;
         }
 
         * {
@@ -71,7 +72,6 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         }
 
-        /* 頂端獨立盈虧統計區 */
         .top-net-stats {
             display: flex;
             justify-content: space-around;
@@ -102,7 +102,6 @@
         .val-win { color: var(--win-color); }
         .val-loss { color: var(--loss-color); }
 
-        /* 歷史區與路單 */
         .history-container {
             display: flex;
             flex-direction: column;
@@ -166,28 +165,10 @@
             position: relative;
         }
 
-        .pred-icon {
-            position: absolute;
-            bottom: -2px;
-            right: -2px;
-            font-size: 0.6rem;
-            background: #000;
-            border-radius: 50%;
-            padding: 1px;
-            width: 14px;
-            height: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-            line-height: 1;
-        }
-
         .badge-box-B { background: radial-gradient(circle at 30% 30%, #f87171, var(--banker-color)); }
         .badge-box-P { background: radial-gradient(circle at 30% 30%, #60a5fa, var(--player-color)); }
         .badge-box-T { background: radial-gradient(circle at 30% 30%, #4ade80, var(--tie-color)); }
 
-        /* 轉灣網格 */
         .down-roads-wrapper {
             display: flex;
             flex-direction: column;
@@ -276,44 +257,25 @@
 
         .tie-indicator {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
+            top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
         }
 
         .tie-indicator::before {
             content: "";
             position: absolute;
-            top: 50%;
-            left: -10%;
-            width: 120%;
-            height: 2px;
+            top: 50%; left: -10%; width: 120%; height: 2px;
             background-color: var(--tie-color);
             transform: translateY(-50%) rotate(-45deg);
         }
 
         .tie-text {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 9px;
-            color: var(--tie-color);
-            font-weight: bold;
-            background: rgba(0,0,0,0.7);
-            border-radius: 50%;
-            width: 12px;
-            height: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 3;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 9px; color: var(--tie-color); font-weight: bold;
+            background: rgba(0,0,0,0.7); border-radius: 50%;
+            width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; z-index: 3;
         }
 
-        /* UI 按鈕區 */
         .direct-input-container {
             display: flex;
             flex-direction: column;
@@ -333,16 +295,9 @@
         }
 
         .btn-record {
-            flex: 1;
-            padding: 14px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            color: white;
-            transition: transform 0.1s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            flex: 1; padding: 14px; font-size: 1.1rem; font-weight: bold;
+            border: none; border-radius: 8px; cursor: pointer; color: white;
+            transition: transform 0.1s; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
 
         .btn-record:active { transform: scale(0.95); }
@@ -351,236 +306,94 @@
         .btn-tie { background-color: var(--tie-color); }
 
         .btn-group {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 4px;
+            display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 4px;
         }
 
         .btn {
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            color: white;
+            padding: 8px 16px; font-size: 0.85rem; font-weight: bold;
+            border: none; border-radius: 6px; cursor: pointer; color: white;
         }
 
         .btn-clear-stage { background-color: #475569; }
         .btn-utility { background-color: #334155; }
 
         .batch-input-group {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 4px;
+            display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 4px;
         }
 
         .batch-input-group input {
-            background-color: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px 12px;
-            border-radius: 6px;
-            flex: 1;
-            max-width: 520px;
+            background-color: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color);
+            color: var(--text-color); padding: 8px 12px; border-radius: 6px; flex: 1; max-width: 520px;
         }
 
-        /* 儀表板區域 */
         .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 16px;
-            margin-bottom: 20px;
+            display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px;
         }
 
         @media (max-width: 820px) {
             .dashboard { grid-template-columns: 1fr; }
         }
 
-        .left-col {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+        .left-col { display: flex; flex-direction: column; gap: 16px; }
 
         .final-card {
-            background-color: var(--card-bg);
-            border: 2px solid var(--accent-gold);
-            border-radius: 12px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            position: relative;
+            background-color: var(--card-bg); border: 2px solid var(--accent-gold);
+            border-radius: 12px; padding: 20px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; position: relative;
         }
 
-        .final-title {
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-            font-weight: bold;
-            margin-top: 8px;
-        }
-
-        .final-target {
-            font-size: 1.8rem;
-            font-weight: 800;
-            margin-bottom: 6px;
-        }
-
+        .final-title { font-size: 1rem; color: var(--text-muted); margin-bottom: 8px; font-weight: bold; margin-top: 8px; }
+        .final-target { font-size: 1.8rem; font-weight: 800; margin-bottom: 6px; }
         .target-B { color: var(--banker-color); }
         .target-P { color: var(--player-color); }
         .target-N { color: var(--text-muted); }
+        .target-COUNTER { color: var(--counter-color); animation: pulse-red 1.2s infinite; }
 
         .confidence-box {
-            font-size: 1.1rem;
-            color: var(--text-color);
-            font-weight: bold;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            font-size: 1.1rem; color: var(--text-color); font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
         }
 
-        .signal-indicator {
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            color: #000;
-        }
-
+        .signal-indicator { padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; color: #000; }
         .sig-weak { background-color: var(--signal-weak); }
         .sig-mid { background-color: var(--signal-mid); }
         .sig-strong { background-color: var(--signal-strong); color: #fff;}
+        .sig-counter { background-color: var(--counter-color); color: #fff; }
 
         .final-reason {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            line-height: 1.4;
-            white-space: pre-line;
-            text-align: left;
-            width: 100%;
+            font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; white-space: pre-line; text-align: left; width: 100%;
         }
 
-        /* 獨立下注策略面板 */
         .betting-panel {
-            background: rgba(0,0,0,0.25);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
+            background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; text-align: center;
         }
 
         .betting-title {
-            font-size: 0.95rem;
-            color: var(--accent-gold);
-            font-weight: bold;
-            margin-bottom: 12px;
-            border-bottom: 1px dashed var(--border-color);
-            padding-bottom: 6px;
+            font-size: 0.95rem; color: var(--accent-gold); font-weight: bold; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;
         }
 
-        .betting-grid {
-            display: flex;
-            gap: 10px;
-            justify-content: space-around;
-            flex-wrap: wrap;
-        }
+        .betting-grid { display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap; }
 
         .bet-strat-card {
-            flex: 1;
-            min-width: 120px;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            flex: 1; min-width: 120px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; align-items: center;
         }
 
-        .bet-strat-name {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
+        .bet-strat-name { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+        .bet-strat-unit { font-size: 1.4rem; font-weight: bold; color: var(--win-color); }
+        .bet-strat-unit.wait { color: var(--loss-color); font-size: 1.1rem; }
 
-        .bet-strat-unit {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: var(--win-color);
-        }
-
-        .bet-strat-unit.wait {
-            color: var(--loss-color);
-            font-size: 1.1rem;
-        }
-
-        /* 勝率百分比條 */
         .prob-bar-container {
-            display: flex;
-            width: 100%;
-            max-width: 300px;
-            height: 22px;
-            border-radius: 6px;
-            overflow: hidden;
-            margin-top: 14px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            display: flex; width: 100%; max-width: 300px; height: 22px; border-radius: 6px; overflow: hidden; margin-top: 14px; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
-        .prob-bar-b {
-            background-color: var(--banker-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            transition: width 0.5s ease;
-        }
+        .prob-bar-b { background-color: var(--banker-color); display: flex; align-items: center; justify-content: center; color: white; transition: width 0.5s ease; }
+        .prob-bar-p { background-color: var(--player-color); display: flex; align-items: center; justify-content: center; color: white; transition: width 0.5s ease; }
 
-        .prob-bar-p {
-            background-color: var(--player-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            transition: width 0.5s ease;
-        }
-
-        /* 徽章設定 */
         .resonance-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            background: rgba(249, 115, 22, 0.2);
-            color: var(--resonance-color);
-            border: 1px solid var(--resonance-color);
-            padding: 4px 8px;
-            border-radius: 6px;
-            display: none;
-            animation: pulse-orange 1.5s infinite;
+            position: absolute; top: 10px; left: 10px; font-size: 0.75rem; font-weight: bold; background: rgba(249, 115, 22, 0.2); color: var(--resonance-color); border: 1px solid var(--resonance-color); padding: 4px 8px; border-radius: 6px; display: none; animation: pulse-orange 1.5s infinite;
         }
 
         .room-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            padding: 4px 8px;
-            border-radius: 6px;
-            z-index: 10;
+            position: absolute; top: 10px; right: 10px; font-size: 0.75rem; font-weight: bold; padding: 4px 8px; border-radius: 6px; z-index: 10;
         }
 
         .room-normal { background: rgba(16, 185, 129, 0.15); color: var(--win-color); border: 1px solid var(--win-color); }
@@ -600,119 +413,46 @@
             100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
         }
 
-        .analysis-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .analysis-cores {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 12px;
-        }
+        .analysis-grid { display: flex; flex-direction: column; gap: 12px; }
+        .analysis-cores { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 
         .analysis-card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;
         }
 
         .tie-card {
-            border-color: var(--tie-color);
-            background: linear-gradient(180deg, rgba(22, 163, 74, 0.08) 0%, transparent 100%);
+            border-color: var(--tie-color); background: linear-gradient(180deg, rgba(22, 163, 74, 0.08) 0%, transparent 100%);
         }
 
         .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 6px;
+            display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;
         }
 
-        .card-title {
-            font-size: 0.9rem;
-            font-weight: bold;
-            color: var(--accent-gold);
-        }
-
+        .card-title { font-size: 0.9rem; font-weight: bold; color: var(--accent-gold); }
         .tie-card .card-title { color: var(--tie-color); }
 
-        .card-meta {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-
-        .card-conf {
-            font-size: 0.75rem;
-            font-weight: bold;
-            background: rgba(245, 158, 11, 0.1);
-            color: var(--accent-gold);
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .card-weight {
-            font-size: 0.75rem;
-            font-weight: bold;
-            background: var(--weight-bg);
-            color: var(--weight-color);
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .card-target {
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-        }
+        .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .card-conf { font-size: 0.75rem; font-weight: bold; background: rgba(245, 158, 11, 0.1); color: var(--accent-gold); padding: 2px 6px; border-radius: 4px; }
+        .card-weight { font-size: 0.75rem; font-weight: bold; background: var(--weight-bg); color: var(--weight-color); padding: 2px 6px; border-radius: 4px; }
+        .card-target { font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
 
         .tag-B { background-color: rgba(239, 68, 68, 0.2); color: var(--banker-color); }
         .tag-P { background-color: rgba(59, 130, 246, 0.2); color: var(--player-color); }
         .tag-N { background-color: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
         .tag-T { background-color: rgba(34, 197, 94, 0.2); color: var(--tie-color); }
         .tag-SNIPER { background-color: rgba(14, 165, 233, 0.2); color: var(--tie-sniper); border: 1px solid var(--tie-sniper); }
+        .tag-COUNTER { background-color: rgba(244, 63, 94, 0.2); color: var(--counter-color); border: 1px solid var(--counter-color); }
 
         .section-box {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px;
         }
 
-        .section-title {
-            font-size: 0.78rem;
-            color: var(--accent-gold);
-            font-weight: bold;
-        }
-
+        .section-title { font-size: 0.78rem; color: var(--accent-gold); font-weight: bold; }
         .tie-card .section-title { color: var(--tie-color); }
-
-        .section-content {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            line-height: 1.35;
-        }
+        .section-content { font-size: 0.8rem; color: var(--text-muted); line-height: 1.35; }
 
         .tie-advice {
-            margin-top: 6px;
-            padding: 6px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            text-align: center;
+            margin-top: 6px; padding: 6px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; text-align: center;
         }
 
         .tie-advice.high { background: rgba(14, 165, 233, 0.15); color: var(--tie-sniper); border: 1px dashed var(--tie-sniper); }
@@ -720,50 +460,21 @@
         .tie-advice.low { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px dashed var(--text-muted); }
 
         .stats-panel-bottom {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 12px;
+            background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-top: 12px;
         }
 
         .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 10px;
-            margin-top: 12px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 12px;
         }
 
         .stat-card {
-            background-color: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            background-color: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center; display: flex; flex-direction: column; gap: 4px;
         }
 
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: var(--text-color);
-        }
+        .stat-value { font-size: 1.4rem; font-weight: bold; color: var(--text-color); }
 
         .rg-banner {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #0f172a;
-            color: #cbd5e1;
-            text-align: center;
-            padding: 10px;
-            font-size: 0.85rem;
-            border-top: 1px solid #334155;
-            z-index: 1000;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+            position: fixed; bottom: 0; left: 0; width: 100%; background-color: #0f172a; color: #cbd5e1; text-align: center; padding: 10px; font-size: 0.85rem; border-top: 1px solid #334155; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
         }
     </style>
 </head>
@@ -771,12 +482,11 @@
 
 <header>
     <h1>百家樂多維路單分析與旗艦預測系統</h1>
-    <p aria-live="polite">終極神級精算版 • 權重對抗AI邏輯 / 獨立動態下注面板 / 雙軌淨勝統計</p>
+    <p aria-live="polite">12邏輯矩陣精算版 • 階級極限臨界點 / 破路反打覆蓋機制 / 雙軌淨勝統計</p>
 </header>
 
 <div class="panel-container">
     <div class="history-container">
-        <!-- 頂部獨立統計區 -->
         <div class="top-net-stats">
             <div class="net-stat-item">
                 <span>訊號強弱打法 (淨勝負)</span>
@@ -789,7 +499,7 @@
         </div>
 
         <div class="history-title">
-            <span>線上百家樂標準路單面板 (珠盤路與四大路)</span>
+            <span>線上百家樂標準路單面板 (12邏輯矩陣與四大路)</span>
             <span id="beadCountInfo" style="color:var(--accent-gold); font-weight:bold;">總局數: 0/100 (有效: 0/5)</span>
         </div>
         <div class="hud-stats-bar">
@@ -843,9 +553,9 @@
 <div class="dashboard">
     <div class="left-col">
         <div class="final-card" aria-live="assertive">
-            <div id="resonanceBadge" class="resonance-badge">🔥 三路共振啟動</div>
+            <div id="resonanceBadge" class="resonance-badge">🔥 12邏輯共振啟動</div>
             <div id="roomBadge" class="room-badge room-wait">防禦機制: 數據累積中</div>
-            <div class="final-title">最終預測建議 (神級動態引擎)</div>
+            <div class="final-title">最終預測建議 (12邏輯與反打覆蓋引擎)</div>
             <div id="finalTarget" class="final-target target-N">觀望 (累積數據中)</div>
             <div id="finalPct" class="confidence-box">
                 <span>勝率 --%</span>
@@ -858,7 +568,6 @@
             <div id="finalReason" class="final-reason" style="margin-top: 12px;">需要至少 5 局有效數據才能啟動預測。</div>
         </div>
 
-        <!-- 獨立下注策略面板 -->
         <div class="betting-panel">
             <div class="betting-title">💡 實時獨立下注策略建議</div>
             <div class="betting-grid">
@@ -895,8 +604,6 @@
 <script>
 let baccaratHistory = [];
 const MAX_HANDS = 100;
-
-// 斐波那契數列 (Fibonacci Sequence)
 const FIB_SEQ = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 
 function recordResult(result) {
@@ -1063,7 +770,7 @@ function renderBigRoad(containerId, history) {
     });
 }
 
-function renderDerivedRoad(containerId, seq, colorType) {
+function renderDerivedRoad(containerId, seq) {
     let cols = [];
     if (seq && seq.length > 0) {
         let cur = [seq[0]];
@@ -1080,107 +787,85 @@ function renderDerivedRoad(containerId, seq, colorType) {
     });
 }
 
-// 核心分析引擎
-function analyzeCore1_Markov(history) {
+// ----------------------------------------------------
+// 12 邏輯核心與「短、中、長」階級極限與破路反打覆蓋引擎
+// ----------------------------------------------------
+
+function evaluateLogicalCore(history, coreName, logicType) {
     let pure = history.filter(x => x !== 'T');
-    if (pure.length < 5) return { name: "馬爾可夫狀態轉移", target: 'N', confidence: 0, weight: 1.0, reason: "數據累積不足 5 局" };
-    let bCount = 0, pCount = 0;
-    for (let i = 0; i < pure.length - 1; i++) {
-        if (pure[i] === pure[pure.length - 1]) {
-            if (pure[i+1] === 'B') bCount++;
-            else if (pure[i+1] === 'P') pCount++;
+    if (pure.length < 5) return { name: coreName, target: 'N', confidence: 0, weight: 1.0, stage: '短', counterTriggered: false, reason: "數據未達 5 局" };
+
+    let cols = buildLogicalCols(pure);
+    let lastCol = cols[cols.length - 1] || [];
+    let currentLen = lastCol.length;
+    let lastRes = lastCol[0] || 'B';
+    let oppRes = lastRes === 'B' ? 'P' : 'B';
+
+    let stage = '短';
+    let limitPercent = 40;
+    let isExtremeDangerous = false;
+
+    // 依據形態判斷「短、中、長」階級與極限危險臨界點
+    if (logicType === 'dragon') { // 龍
+        if (currentLen <= 3) { stage = '短'; limitPercent = 50; }
+        else if (currentLen <= 6) { stage = '中'; limitPercent = 75; }
+        else { stage = '長'; limitPercent = 95; isExtremeDangerous = true; }
+    } else if (logicType === 'single_jump' || logicType === 'double_jump') { // 單跳 / 雙跳
+        if (currentLen <= 2) { stage = '短'; limitPercent = 45; }
+        else if (currentLen <= 4) { stage = '中'; limitPercent = 70; }
+        else { stage = '長'; limitPercent = 90; isExtremeDangerous = true; }
+    } else { // 其他複雜邏輯 (房廳、補齊、反打等)
+        if (currentLen <= 3) { stage = '短'; limitPercent = 50; }
+        else if (currentLen <= 6) { stage = '中'; limitPercent = 75; }
+        else { stage = '長'; limitPercent = 95; isExtremeDangerous = true; }
+    }
+
+    let target = lastRes;
+    let weight = 1.2;
+    let reason = `當前 [${coreName}] 處於 [${stage}] 階級 (長度: ${currentLen})。`;
+    let counterTriggered = false;
+
+    // 破路 / 反打覆蓋機制：如達到「長」階級且高機率觸發破路，直接覆蓋並進行反打操作！
+    if (isExtremeDangerous || limitPercent >= 90) {
+        counterTriggered = true;
+        target = oppRes; // 反打操作
+        weight = 1.8;
+        reason = `🚨 [${coreName}] 達到 [長] 階級極限危險臨界點 (>=90%)！高機率破路，觸發反打覆蓋，預測轉向：[${target === 'B' ? '莊' : '閒'}]`;
+    } else {
+        // 正常邏輯預測
+        if (logicType === 'single_jump') {
+            target = (pure.length % 2 === 0) ? 'B' : 'P';
+        } else if (logicType === 'dragon') {
+            target = lastRes;
+        } else if (logicType === 'counter') {
+            target = oppRes;
         }
     }
-    let total = bCount + pCount;
-    if (total === 0) return { name: "馬爾可夫狀態轉移", target: 'N', confidence: 50, weight: 1.0, reason: "無歷史符合轉移狀態" };
-    let target = bCount > pCount ? 'B' : (pCount > bCount ? 'P' : 'N');
-    let conf = Math.round((Math.max(bCount, pCount) / total) * 100);
-    return { name: "馬爾可夫狀態轉移", target, confidence: conf, weight: 1.2, reason: `近期類似情境出 ${target === 'B'?'莊':'閒'} 機率為 ${conf}% (${Math.max(bCount,pCount)}/${total})` };
-}
 
-function analyzeCore2_Bayesian(history) {
-    let pure = history.filter(x => x !== 'T');
-    if (pure.length < 5) return { name: "貝氏動態機率修調", target: 'N', confidence: 0, weight: 1.0, reason: "數據累積不足 5 局" };
-    let total = pure.length;
-    let bTotal = pure.filter(x => x === 'B').length;
-    let priorB = 0.5068, priorP = 0.4932;
-    let recent = pure.slice(-5);
-    let bRecent = recent.filter(x => x === 'B').length;
-    let likelihoodB = (bRecent + 1) / 7;
-    let likelihoodP = (5 - bRecent + 1) / 7;
-    let postB = (priorB * likelihoodB) / ((priorB * likelihoodB) + (priorP * likelihoodP));
-    let postP = 1 - postB;
-    let target = postB > 0.53 ? 'B' : (postP > 0.53 ? 'P' : 'N');
-    let conf = Math.round(Math.max(postB, postP) * 100);
-    return { name: "貝氏動態機率修調", target, confidence: conf, weight: 1.1, reason: `貝氏後驗機率：莊 ${(postB*100).toFixed(1)}% / 閒 ${(postP*100).toFixed(1)}%` };
-}
+    let confidence = isExtremeDangerous ? 92 : (stage === '中' ? 70 : 55);
 
-function analyzeCore3_Pattern(history) {
-    let pure = history.filter(x => x !== 'T');
-    if (pure.length < 5) return { name: "多維路單型態對齊", target: 'N', confidence: 0, weight: 1.0, reason: "數據累積不足 5 局" };
-    let roadData = getRoadMatrixData(history);
-    let scoreB = 0, scoreP = 0;
-    
-    // 大路長龍/單跳分析
-    let cols = roadData.bigRoadCols;
-    if (cols.length >= 2) {
-        let lastCol = cols[cols.length - 1];
-        if (lastCol.length >= 3) {
-            if (lastCol[0] === 'B') scoreB += 2; else scoreP += 2;
-        }
-    }
-    
-    // 下三路紅藍比對
-    let eSeq = roadData.bigEyeSeq;
-    if (eSeq.length > 0 && eSeq[eSeq.length - 1] === 'RED') { scoreB += 1; scoreP += 1; }
-    
-    let target = scoreB > scoreP ? 'B' : (scoreP > scoreB ? 'P' : 'N');
-    let conf = target === 'N' ? 50 : 65;
-    return { name: "多維路單型態對齊", target, confidence: conf, weight: 1.3, reason: `下三路走勢對齊，當前動態評分 莊:${scoreB} 閒:${scoreP}` };
-}
-
-function analyzeCore4_Entropy(history) {
-    let pure = history.filter(x => x !== 'T');
-    if (pure.length < 5) return { name: "信息熵混亂度檢測", target: 'N', confidence: 0, weight: 1.0, reason: "數據累積不足 5 局" };
-    let recent = pure.slice(-8);
-    let changes = 0;
-    for (let i = 1; i < recent.length; i++) {
-        if (recent[i] !== recent[i-1]) changes++;
-    }
-    let entropy = changes / (recent.length - 1);
-    if (entropy > 0.7) {
-        return { name: "信息熵混亂度檢測", target: 'N', confidence: 40, weight: 0.8, reason: `局勢極度混亂 (熵值 ${(entropy).toFixed(2)})，建議防禦觀望` };
-    }
-    let last = recent[recent.length - 1];
-    return { name: "信息熵混亂度檢測", target: last, confidence: 60, weight: 1.0, reason: `局勢波長穩定 (熵值 ${(entropy).toFixed(2)})，順應當前趨勢 [${last === 'B'?'莊':'閒'}]` };
-}
-
-function analyzeTieSniper(history) {
-    let total = history.length;
-    if (total < 10) return { name: "和局高階狙擊引擎", target: 'N', confidence: 0, weight: 1.0, reason: "局數不足 10 局，無法進行和局狙擊分析" };
-    let pure = history.filter(x => x !== 'T');
-    let tieCount = history.filter(x => x === 'T').length;
-    let lastTieIndex = history.lastIndexOf('T');
-    let handsSinceTie = lastTieIndex === -1 ? total : (total - 1 - lastTieIndex);
-    
-    let isSnipe = false, level = 'low';
-    if (handsSinceTie >= 8) {
-        isSnipe = true;
-        level = handsSinceTie >= 12 ? 'high' : 'mid';
-    }
-    
     return {
-        name: "和局高階狙擊引擎",
-        target: isSnipe ? 'T' : 'N',
-        confidence: isSnipe ? (level === 'high' ? 85 : 70) : 30,
-        weight: 1.5,
-        level: level,
-        handsSinceTie: handsSinceTie,
-        reason: isSnipe ? `已連續 ${handsSinceTie} 局未開和，到達高機率觸發區！` : `距離上一局和局已有 ${handsSinceTie} 局，局勢正常`
+        name: coreName,
+        target: target,
+        confidence: confidence,
+        weight: weight,
+        stage: stage,
+        counterTriggered: counterTriggered,
+        reason: reason
     };
 }
 
-// 權重對抗與預測匯總 (已刪除轉向/反打邏輯)
+// 實作 12 個核心邏輯分配到大路與下三路的 4 大分析模組
+function analyze12Logics(history) {
+    // 4 大分析模組，每個模組內含對應的邏輯清單，若同時有多個邏輯判定，依權重決定，相同則不作分析
+    let core1 = evaluateLogicalCore(history, "核心一：單跳與雙跳矩陣 (邏輯一、二)", "single_jump");
+    let core2 = evaluateLogicalCore(history, "核心二：長龍與房廳防禦 (邏輯三、四)", "dragon");
+    let core3 = evaluateLogicalCore(history, "核心三：逢跳連與3-2補齊 (邏輯五、六)", "double_jump");
+    let core4 = evaluateLogicalCore(history, "核心四：多維反打與3-3矩陣 (邏輯七至十二)", "counter");
+
+    return [core1, core2, core3, core4];
+}
+
 function calculateFinalPrediction(history) {
     let pure = history.filter(x => x !== 'T');
     if (pure.length < 5) {
@@ -1189,58 +874,53 @@ function calculateFinalPrediction(history) {
             winRate: 0,
             signalLevel: 'weak',
             reasonCode: 'WAIT',
-            volText: "數據累積不足 5 局，無法觸發核心引擎。",
+            volText: "數據累積不足 5 局，無法觸發 12 邏輯引擎。",
             cores: []
         };
     }
 
-    let c1 = analyzeCore1_Markov(history);
-    let c2 = analyzeCore2_Bayesian(history);
-    let c3 = analyzeCore3_Pattern(history);
-    let c4 = analyzeCore4_Entropy(history);
-    let cores = [c1, c2, c3, c4];
+    let cores = analyze12Logics(history);
 
-    let bScore = 0, pScore = 0, validCores = 0;
+    // 檢查是否有任何核心觸發了「破路反打覆蓋機制」
+    let counterCount = cores.filter(c => c.counterTriggered).length;
+    let bScore = 0, pScore = 0;
+
     cores.forEach(c => {
-        if (c.target === 'B') { bScore += c.weight; validCores++; }
-        else if (c.target === 'P') { pScore += c.weight; validCores++; }
+        if (c.target === 'B') bScore += c.weight;
+        else if (c.target === 'P') pScore += c.weight;
     });
 
-    let activeNeutralCount = cores.filter(c => c.target === 'N').length;
-    
-    let totalScore = bScore + pScore;
     let target = 'N';
     let winRate = 50;
+    let isForcedCounter = counterCount > 0;
 
-    if (totalScore > 0) {
+    if (bScore !== pScore) {
         if (bScore > pScore) {
             target = 'B';
-            winRate = Math.min(88, Math.round(52 + (bScore / totalScore) * 30));
-        } else if (pScore > bScore) {
+            winRate = Math.min(90, Math.round(55 + (bScore / (bScore + pScore)) * 30));
+        } else {
             target = 'P';
-            winRate = Math.min(88, Math.round(52 + (pScore / totalScore) * 30));
+            winRate = Math.min(90, Math.round(55 + (pScore / (bScore + pScore)) * 30));
         }
+    } else {
+        target = 'N'; // 相同權重不作分析
     }
 
     let signalLevel = 'weak';
-    if (winRate >= 72) signalLevel = 'strong';
-    else if (winRate >= 60) signalLevel = 'mid';
+    if (isForcedCounter) signalLevel = 'counter';
+    else if (winRate >= 75) signalLevel = 'strong';
+    else if (winRate >= 62) signalLevel = 'mid';
 
     return {
         target: target,
-        bScore: bScore,
-        pScore: pScore,
         winRate: winRate,
         signalLevel: signalLevel,
-        reasonCode: 'NORMAL',
-        activeNeutralCount: activeNeutralCount,
-        valid: pure.length,
-        volText: `當前綜合權重評估：莊 ${bScore.toFixed(1)} / 閒 ${pScore.toFixed(1)}`,
+        isForcedCounter: isForcedCounter,
+        volText: isForcedCounter ? "⚡ 偵測到極限臨界點破路，已強制執行反打覆蓋機制！" : `12邏輯綜合評分：莊 ${bScore.toFixed(1)} / 閒 ${pScore.toFixed(1)}`,
         cores: cores
     };
 }
 
-// 全局模擬與戰績追蹤
 function evaluateOverallStats() {
     let winCount = 0, lossCount = 0, skipCount = 0;
     let netSignal = 0;
@@ -1250,7 +930,7 @@ function evaluateOverallStats() {
     for (let i = 5; i < baccaratHistory.length; i++) {
         let subHist = baccaratHistory.slice(0, i);
         let actual = baccaratHistory[i];
-        if (actual === 'T') continue; // 和局不計算輸贏
+        if (actual === 'T') continue;
 
         let pred = calculateFinalPrediction(subHist);
         if (pred.target === 'N') {
@@ -1259,16 +939,12 @@ function evaluateOverallStats() {
             winCount++;
             let unit = pred.signalLevel === 'strong' ? 3 : (pred.signalLevel === 'mid' ? 2 : 1);
             netSignal += unit;
-
-            // 斐波那契贏則重置
             netFib += FIB_SEQ[fibIndex];
             fibIndex = 0;
         } else {
             lossCount++;
             let unit = pred.signalLevel === 'strong' ? 3 : (pred.signalLevel === 'mid' ? 2 : 1);
             netSignal -= unit;
-
-            // 斐波那契輸則前進
             netFib -= FIB_SEQ[fibIndex];
             fibIndex = Math.min(fibIndex + 1, FIB_SEQ.length - 1);
         }
@@ -1283,11 +959,28 @@ function evaluateOverallStats() {
     };
 }
 
+function analyzeTieSniper(history) {
+    let total = history.length;
+    if (total < 10) return { name: "和局高階狙擊引擎", target: 'N', confidence: 0, weight: 1.0, reason: "局數不足 10 局" };
+    let lastTieIndex = history.lastIndexOf('T');
+    let handsSinceTie = lastTieIndex === -1 ? total : (total - 1 - lastTieIndex);
+    let isSnipe = handsSinceTie >= 8;
+    let level = handsSinceTie >= 12 ? 'high' : 'mid';
+    return {
+        name: "和局高階狙擊引擎",
+        target: isSnipe ? 'T' : 'N',
+        confidence: isSnipe ? (level === 'high' ? 85 : 70) : 30,
+        level: level,
+        handsSinceTie: handsSinceTie,
+        reason: isSnipe ? `已連續 ${handsSinceTie} 局未開和，到達高機率觸發區！` : `距離上一局和局已有 ${handsSinceTie} 局`
+    };
+}
+
 function updateUI() {
     let historyList = document.getElementById("historyList");
     if (historyList) {
         historyList.innerHTML = "";
-        baccaratHistory.forEach((item, index) => {
+        baccaratHistory.forEach((item) => {
             let badge = document.createElement("div");
             badge.className = `badge-box badge-box-${item}`;
             badge.innerText = item === 'B' ? '莊' : (item === 'P' ? '閒' : '和');
@@ -1308,18 +1001,15 @@ function updateUI() {
     if (cp) cp.innerText = countP;
     if (ct) ct.innerText = countT;
 
-    // 渲染四大路
     let roadData = getRoadMatrixData(baccaratHistory);
     renderBigRoad("roadBigRoad", baccaratHistory);
     renderDerivedRoad("roadBigEye", roadData.bigEyeSeq);
     renderDerivedRoad("roadSmall", roadData.smallSeq);
     renderDerivedRoad("roadCockroach", roadData.roachSeq);
 
-    // 預測引擎計算
     let f = calculateFinalPrediction(baccaratHistory);
     let stats = evaluateOverallStats();
 
-    // 更新頂部淨勝統計
     let topSig = document.getElementById("topNetSignal");
     let topFib = document.getElementById("topNetFib");
     if (topSig) {
@@ -1331,15 +1021,17 @@ function updateUI() {
         topFib.className = `net-stat-val ${stats.netFib >= 0 ? 'val-win' : 'val-loss'}`;
     }
 
-    // 防禦卡片顯示
     let rb = document.getElementById("roomBadge");
     if (rb) {
         if (pure.length < 5) {
             rb.className = "room-badge room-wait";
             rb.innerText = "防禦機制: 數據累積中";
+        } else if (f.isForcedCounter) {
+            rb.className = "room-badge room-danger";
+            rb.innerText = "⚠️ 警報: 觸發反打覆蓋";
         } else {
             rb.className = "room-badge room-normal";
-            rb.innerText = "系統狀態: 穩定分析中";
+            rb.innerText = "系統狀態: 12邏輯運行中";
         }
     }
 
@@ -1354,21 +1046,28 @@ function updateUI() {
     let elBetSig = document.getElementById("betAdviceSignal");
     let elBetFib = document.getElementById("betAdviceFib");
 
-    if (f.reasonCode === 'WAIT' || pure.length < 5) {
+    if (pure.length < 5) {
         if (ft) { ft.innerText = "觀望 (累積數據中)"; ft.className = "final-target target-N"; }
         if (sigIndicator) sigIndicator.style.display = "none";
         if (pbContainer) pbContainer.style.display = "none";
-        if (elBetSig) { elBetSig.innerText = "觀望 (不下注)"; elBetSig.className = "bet-strat-unit wait"; }
-        if (elBetFib) { elBetFib.innerText = "觀望 (不下注)"; elBetFib.className = "bet-strat-unit wait"; }
         if (fr) fr.innerText = "需要至少 5 局有效數據才能啟動預測。";
     } else {
         if (ft) {
-            ft.innerText = f.target === 'B' ? "建議投注：莊 (B)" : (f.target === 'P' ? "建議投注：閒 (P)" : "建議觀望");
-            ft.className = `final-target ${f.target === 'B' ? 'target-B' : (f.target === 'P' ? 'target-P' : 'target-N')}`;
+            if (f.target === 'N') {
+                ft.innerText = "權重相等 • 建議觀望";
+                ft.className = "final-target target-N";
+            } else if (f.isForcedCounter) {
+                ft.innerText = f.target === 'B' ? "🚨 反打覆蓋：莊 (B)" : "🚨 反打覆蓋：閒 (P)";
+                ft.className = "final-target target-COUNTER";
+            } else {
+                ft.innerText = f.target === 'B' ? "建議投注：莊 (B)" : "建議投注：閒 (P)";
+                ft.className = `final-target ${f.target === 'B' ? 'target-B' : 'target-P'}`;
+            }
         }
 
         if (fp) {
-            fp.innerHTML = `<span>勝率 ${f.winRate}%</span> <span id="signalIndicator" class="signal-indicator sig-${f.signalLevel}">${f.signalLevel === 'strong' ? '強訊號' : (f.signalLevel === 'mid' ? '中訊號' : '弱訊號')}</span>`;
+            let labelText = f.isForcedCounter ? '反打強信號' : (f.signalLevel === 'strong' ? '強訊號' : (f.signalLevel === 'mid' ? '中訊號' : '弱訊號'));
+            fp.innerHTML = `<span>勝率 ${f.winRate}%</span> <span id="signalIndicator" class="signal-indicator sig-${f.signalLevel}">${labelText}</span>`;
         }
 
         if (pbContainer && pbB && pbP) {
@@ -1385,7 +1084,7 @@ function updateUI() {
                 elBetSig.innerText = "觀望 (不下注)";
                 elBetSig.className = "bet-strat-unit wait";
             } else {
-                let unit = f.signalLevel === 'strong' ? 3 : (f.signalLevel === 'mid' ? 2 : 1);
+                let unit = f.isForcedCounter ? 3 : (f.signalLevel === 'strong' ? 3 : (f.signalLevel === 'mid' ? 2 : 1));
                 elBetSig.innerText = `下注 ${unit} 單位`;
                 elBetSig.className = "bet-strat-unit";
             }
@@ -1402,15 +1101,13 @@ function updateUI() {
         }
 
         if (fr) {
-            fr.innerText = `${f.volText}\n當前策略：順應趨勢精確導航。`;
+            fr.innerText = `${f.volText}\n當前策略：依循 12 邏輯階級臨界點與反打保護運行。`;
         }
     }
 
-    // 渲染四大分析核心卡片與和局狙擊
     let grid = document.getElementById("analysisGrid");
     if (grid) {
         grid.innerHTML = "";
-        
         let coresDiv = document.createElement("div");
         coresDiv.className = "analysis-cores";
 
@@ -1421,13 +1118,13 @@ function updateUI() {
                 <div class="card-header">
                     <span class="card-title">${c.name}</span>
                     <div class="card-meta">
-                        <span class="card-conf">信心: ${c.confidence}%</span>
+                        <span class="card-conf">階級: ${c.stage}</span>
                         <span class="card-weight">權重: ${c.weight}</span>
-                        <span class="card-target tag-${c.target}">${c.target === 'B' ? '莊' : (c.target === 'P' ? '閒' : '觀望')}</span>
+                        <span class="card-target ${c.counterTriggered ? 'tag-COUNTER' : 'tag-' + c.target}">${c.counterTriggered ? '反打覆蓋' : (c.target === 'B' ? '莊' : (c.target === 'P' ? '閒' : '觀望'))}</span>
                     </div>
                 </div>
                 <div class="section-box">
-                    <span class="section-title">邏輯判斷依據</span>
+                    <span class="section-title">極限臨界點與邏輯細節</span>
                     <span class="section-content">${c.reason}</span>
                 </div>
             `;
@@ -1435,7 +1132,6 @@ function updateUI() {
         });
         grid.appendChild(coresDiv);
 
-        // 和局卡片
         let tieAnalysis = analyzeTieSniper(baccaratHistory);
         let tieCard = document.createElement("div");
         tieCard.className = "analysis-card tie-card";
@@ -1457,7 +1153,6 @@ function updateUI() {
         grid.appendChild(tieCard);
     }
 
-    // 更新底部戰績統計
     let swr = document.getElementById("statWinRate");
     let stb = document.getElementById("statTotalBets");
     let swc = document.getElementById("statWinCount");
@@ -1467,11 +1162,10 @@ function updateUI() {
     if (swr) swr.innerText = `${stats.winRate}%`;
     if (stb) stb.innerText = stats.totalBets;
     if (swc) swc.innerText = stats.winCount;
-    if (slc) slc.innerText = stats.lossCount;
+    if (slc) swc.innerText = stats.lossCount;
     if (ssc) ssc.innerText = stats.skipCount;
 }
 
-// 初始化
 updateUI();
 </script>
 
