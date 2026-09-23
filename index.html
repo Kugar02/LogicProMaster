@@ -1,12 +1,246 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none';">
-    <title>百家樂多維路單分析與旗艦預測系統 (AI 10萬局模擬增強版)</title>
-    <style>
-       /**
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none';">
+<title>百家樂多維路單分析與旗艦預測系統 (AI 10萬局模擬增強版)</title>
+<style>
+:root {
+    --bg-color: #0b0f19;
+    --card-bg: #151c2f;
+    --text-color: #f1f5f9;
+    --text-muted: #94a3b8;
+    --banker-color: #dc2626;
+    --player-color: #2563eb;
+    --tie-color: #16a34a;
+    --border-color: #1e293b;
+    --accent-gold: #fbbf24;
+    --win-color: #10b981;
+    --loss-color: #f43f5e;
+    --weight-color: #d8b4fe;
+    --weight-bg: rgba(168, 85, 247, 0.15);
+    --resonance-color: #f97316;
+    --signal-weak: #34d399;
+    --signal-mid: #fbbf24;
+    --signal-strong: #f87171;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+body { background-color: var(--bg-color); color: var(--text-color); padding: 16px; max-width: 1280px; margin: 0 auto; padding-bottom: 80px; }
+header { text-align: center; margin-bottom: 16px; }
+header h1 { font-size: 1.6rem; color: var(--accent-gold); margin-bottom: 4px; }
+header p { color: var(--text-muted); font-size: 0.85rem; }
+
+.panel-container { background-color: var(--card-bg); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+
+/* 統計區 */
+.top-net-stats { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 4px; flex-wrap: wrap; gap: 10px; }
+.net-stat-item { display: flex; flex-direction: column; align-items: center; font-size: 0.85rem; color: var(--text-muted); }
+.net-stat-val { font-size: 1.3rem; font-weight: bold; color: var(--text-color); margin-top: 2px; }
+.val-win { color: var(--win-color); }
+.val-loss { color: var(--loss-color); }
+
+/* 路單區 */
+.history-container { display: flex; flex-direction: column; gap: 8px; background: rgba(0, 0, 0, 0.25); padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); }
+.history-title { font-size: 0.9rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.hud-stats-bar { display: flex; gap: 16px; justify-content: center; font-size: 0.85rem; font-weight: bold; background: rgba(0, 0, 0, 0.4); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 8px; }
+.hud-b { color: var(--banker-color); } .hud-p { color: var(--player-color); } .hud-t { color: var(--tie-color); }
+
+.history-list { display: grid; grid-template-rows: repeat(6, auto); grid-auto-flow: column; grid-auto-columns: minmax(36px, auto); gap: 4px; min-height: 100px; overflow-x: auto; align-content: start; padding-bottom: 6px; }
+.badge-box { display: flex; align-items: center; justify-content: center; border-radius: 50%; color: white; font-size: 0.8rem; font-weight: bold; box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.4); width: 36px; height: 36px; min-width: 36px; position: relative; }
+.badge-box-B { background: radial-gradient(circle at 30% 30%, #f87171, var(--banker-color)); }
+.badge-box-P { background: radial-gradient(circle at 30% 30%, #60a5fa, var(--player-color)); }
+.badge-box-T { background: radial-gradient(circle at 30% 30%, #4ade80, var(--tie-color)); }
+
+/* 轉彎網格 */
+.down-roads-wrapper { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.down-road-row { display: flex; align-items: flex-start; gap: 10px; background: rgba(255, 255, 255, 0.015); padding: 6px 10px; border-radius: 6px; }
+.down-road-label { font-size: 0.8rem; color: var(--text-muted); min-width: 55px; margin-top: 2px; font-weight: bold; }
+.down-road-matrix { display: flex; gap: 1px; overflow-x: auto; flex: 1; align-items: flex-start; height: 84px; }
+.road-col { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; width: 12px; }
+.type-bigroad .road-col { width: 14px; }
+.road-cell { width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; position: relative; }
+.type-bigroad .road-cell { width: 14px; height: 14px; }
+.mini-dot { width: 100%; height: 100%; border-radius: 50%; display: inline-block; position: relative; }
+.mini-dot.empty { background-color: transparent; border: 1px dashed var(--border-color); }
+.type-bigroad .mini-dot.red { border: 2px solid var(--banker-color); background-color: transparent; }
+.type-bigroad .mini-dot.blue { border: 2px solid var(--player-color); background-color: transparent; }
+.type-bigroad .mini-dot.green { border: 2px solid var(--tie-color); background-color: transparent; }
+.type-bigeye .mini-dot.red, .type-small .mini-dot.red { background-color: var(--banker-color); }
+.type-bigeye .mini-dot.blue, .type-small .mini-dot.blue { background-color: var(--player-color); }
+.type-bigeye .mini-dot.red { border: 2px solid var(--banker-color); background-color: transparent; }
+.type-bigeye .mini-dot.blue { border: 2px solid var(--player-color); background-color: transparent; }
+.type-roach .mini-dot.red { background: linear-gradient(45deg, transparent 40%, var(--banker-color) 40%, var(--banker-color) 60%, transparent 60%); border: 1px solid var(--banker-color); }
+.type-roach .mini-dot.blue { background: linear-gradient(45deg, transparent 40%, var(--player-color) 40%, var(--player-color) 60%, transparent 60%); border: 1px solid var(--player-color); }
+.tie-indicator { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+.tie-indicator::before { content: ""; position: absolute; top: 50%; left: -10%; width: 120%; height: 2px; background-color: var(--tie-color); transform: translateY(-50%) rotate(-45deg); }
+.tie-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 9px; color: var(--tie-color); font-weight: bold; background: rgba(0,0,0,0.7); border-radius: 50%; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; z-index: 3;}
+
+/* 莊閒問路介面 */
+.ask-road-container { display: flex; gap: 10px; margin-top: 10px; width: 100%; justify-content: center; }
+.ask-block { flex: 1; max-width: 280px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center; }
+.ask-title { font-size: 0.9rem; font-weight: bold; margin-bottom: 8px; }
+.ask-b-title { color: var(--banker-color); }
+.ask-p-title { color: var(--player-color); }
+.ask-icons { display: flex; justify-content: center; gap: 12px; }
+.ask-dot-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-muted); }
+.ask-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px dashed var(--border-color); }
+
+/* UI 按鈕區 */
+.direct-input-container { display: flex; flex-direction: column; gap: 10px; align-items: center; width: 100%; }
+.direct-title { font-size: 0.9rem; color: var(--text-muted); }
+.btn-input-group { display: flex; gap: 12px; width: 100%; justify-content: center; max-width: 580px; }
+.btn-record { flex: 1; padding: 14px; font-size: 1.1rem; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; transition: transform 0.1s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+.btn-record:active { transform: scale(0.95); }
+.btn-banker { background-color: var(--banker-color); }
+.btn-player { background-color: var(--player-color); }
+.btn-tie { background-color: var(--tie-color); }
+.btn-group { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+.btn { padding: 8px 16px; font-size: 0.85rem; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; color: white; }
+.btn-clear-stage { background-color: #475569; }
+.btn-utility { background-color: #334155; }
+.batch-input-group { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.batch-input-group input { background-color: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 12px; border-radius: 6px; flex: 1; max-width: 520px; }
+
+/* 儀表板區域 */
+.dashboard { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 820px) { .dashboard { grid-template-columns: 1fr; } }
+.left-col { display: flex; flex-direction: column; gap: 16px; }
+.final-card { background-color: var(--card-bg); border: 2px solid var(--accent-gold); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; }
+.final-title { font-size: 1rem; color: var(--text-muted); margin-bottom: 8px; font-weight: bold; margin-top: 8px; }
+.final-target { font-size: 1.8rem; font-weight: 800; margin-bottom: 6px; }
+.target-B { color: var(--banker-color); } .target-P { color: var(--player-color); } .target-N { color: var(--text-muted); }
+.confidence-box { font-size: 1.1rem; color: var(--text-color); font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.signal-indicator { padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; color: #000; }
+.sig-weak { background-color: var(--signal-weak); }
+.sig-mid { background-color: var(--signal-mid); }
+.sig-strong { background-color: var(--signal-strong); color: #fff; }
+.final-reason { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; white-space: pre-line; text-align: left; width: 100%; }
+
+/* 分析核心卡片 */
+.analysis-grid { display: flex; flex-direction: column; gap: 12px; }
+.analysis-cores { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.analysis-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+.card-title { font-size: 0.9rem; font-weight: bold; color: var(--accent-gold); }
+.card-meta { display: flex; align-items: center; gap: 6px; }
+.card-weight { font-size: 0.75rem; font-weight: bold; background: var(--weight-bg); color: var(--weight-color); padding: 2px 6px; border-radius: 4px; }
+.card-target { font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+.tag-B { background-color: rgba(239, 68, 68, 0.2); color: var(--banker-color); }
+.tag-P { background-color: rgba(59, 130, 246, 0.2); color: var(--player-color); }
+.tag-N { background-color: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
+.section-box { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.section-title { font-size: 0.78rem; color: var(--accent-gold); font-weight: bold; }
+.section-content { font-size: 0.8rem; color: var(--text-muted); line-height: 1.35; }
+.break-alert { color: var(--loss-color); font-weight: bold; margin-top: 4px; font-size: 0.75rem; background: rgba(244, 63, 94, 0.1); padding: 4px; border-radius: 4px; }
+
+/* 底部宣告 */
+.rg-banner { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #0f172a; color: #cbd5e1; text-align: center; padding: 10px; font-size: 0.85rem; border-top: 1px solid #334155; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>百家樂多維路單分析與旗艦預測系統</h1>
+    <p>終極神級精算版 • 全新12項邏輯權重對抗AI / 動態破路反打 / 莊閒問路</p>
+</header>
+
+<div class="panel-container">
+    <div class="history-container">
+        <div class="top-net-stats">
+            <div class="net-stat-item"><span>勝負統計 (測試用)</span><span id="topNetSignal" class="net-stat-val">0 單位</span></div>
+        </div>
+        <div class="history-title">
+            <span>標準路單面板 (珠盤路與四大路)</span>
+            <span id="beadCountInfo" style="color:var(--accent-gold); font-weight:bold;">總局數: 0/100</span>
+        </div>
+        <div class="hud-stats-bar">
+            <span>莊 (B): <strong id="countB" class="hud-b">0</strong></span>
+            <span>閒 (P): <strong id="countP" class="hud-p">0</strong></span>
+            <span>和 (T): <strong id="countT" class="hud-t">0</strong></span>
+        </div>
+        <div id="historyList" class="history-list"></div>
+
+        <div class="down-roads-wrapper">
+            <div class="down-road-row type-bigroad">
+                <span class="down-road-label">大路</span>
+                <div id="roadBigRoad" class="down-road-matrix"></div>
+            </div>
+            <div class="down-road-row type-bigeye">
+                <span class="down-road-label">大眼仔路</span>
+                <div id="roadBigEye" class="down-road-matrix"></div>
+            </div>
+            <div class="down-road-row type-small">
+                <span class="down-road-label">小路</span>
+                <div id="roadSmall" class="down-road-matrix"></div>
+            </div>
+            <div class="down-road-row type-roach">
+                <span class="down-road-label">曱甴路</span>
+                <div id="roadCockroach" class="down-road-matrix"></div>
+            </div>
+        </div>
+        
+        <!-- 莊閒問路介面 -->
+        <div class="ask-road-container">
+            <div class="ask-block">
+                <div class="ask-title ask-b-title">莊問路 (Banker)</div>
+                <div class="ask-icons">
+                    <div class="ask-dot-wrapper"><span>大眼</span><span id="askBigEyeB" class="ask-dot empty"></span></div>
+                    <div class="ask-dot-wrapper"><span>小路</span><span id="askSmallB" class="ask-dot empty"></span></div>
+                    <div class="ask-dot-wrapper"><span>曱甴</span><span id="askRoachB" class="ask-dot empty"></span></div>
+                </div>
+            </div>
+            <div class="ask-block">
+                <div class="ask-title ask-p-title">閒問路 (Player)</div>
+                <div class="ask-icons">
+                    <div class="ask-dot-wrapper"><span>大眼</span><span id="askBigEyeP" class="ask-dot empty"></span></div>
+                    <div class="ask-dot-wrapper"><span>小路</span><span id="askSmallP" class="ask-dot empty"></span></div>
+                    <div class="ask-dot-wrapper"><span>曱甴</span><span id="askRoachP" class="ask-dot empty"></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel-container">
+    <div class="direct-input-container">
+        <span class="direct-title">點擊下方按鈕直接記錄當局開牌結果 (單靴上限 100 局)</span>
+        <div class="btn-input-group">
+            <button class="btn-record btn-player" onclick="recordResult('P')">閒 (P)</button>
+            <button class="btn-record btn-tie" onclick="recordResult('T')">和 (T)</button>
+            <button class="btn-record btn-banker" onclick="recordResult('B')">莊 (B)</button>
+        </div>
+    </div>
+    <div class="btn-group">
+        <button class="btn btn-clear-stage" onclick="undoRecord()">復原上一局</button>
+        <button class="btn btn-clear-stage" onclick="clearRecords()">重置全盤牌局</button>
+    </div>
+    <div class="batch-input-group">
+        <input type="text" id="batchInput" placeholder="批量賽果（例：B,P,B,T）" onkeypress="handleKeyPress(event)">
+        <button class="btn btn-utility" onclick="loadBatchInput()">載入</button>
+    </div>
+</div>
+
+<div class="dashboard">
+    <div class="left-col">
+        <div class="final-card">
+            <div class="final-title">AI 終極決策預測</div>
+            <div id="finalTarget" class="final-target target-N">觀望 (分析中)</div>
+            <div id="finalReason" class="final-reason">請輸入更多數據。</div>
+        </div>
+    </div>
+    <div class="analysis-grid" id="analysisGrid">
+        <!-- AI 核心分析將由 JS 動態生成 -->
+    </div>
+</div>
+
+<div class="rg-banner">
+    🔞 負責任博彩提示：本系統僅作為數學機率與走勢分析之單機工具，未連接任何資料庫，不提供真實金錢交易。
+</div>
+
+<script>
+/**
  * 百家樂多維路單與 AI 預測核心引擎 (模組化優化版)
  * 包含：四大路單引擎、問路系統、12大AI權重邏輯
  */
@@ -19,7 +253,6 @@ const BaccaratApp = (function() {
 
     // --- 1. 路單運算模組 (RoadMap Engine) ---
     const RoadMap = {
-        // 構建大路
         buildBigRoad(history) {
             let grid = [], curCol = -1, lastColor = null, tieCount = 0;
             history.forEach(res => {
@@ -38,7 +271,6 @@ const BaccaratApp = (function() {
             });
             return grid;
         },
-        // 構建下三路 (大眼仔=1, 小路=2, 曱甴路=3)
         getDerivedSequence(bigRoadMatrix, offset) {
             let seq = [];
             for (let col = 1; col < bigRoadMatrix.length; col++) {
@@ -59,7 +291,6 @@ const BaccaratApp = (function() {
             }
             return seq;
         },
-        // 矩陣/陣列 轉 長度序列 (供 AI 分析)
         matrixToLengths(matrix) { return matrix.map(col => col.length); },
         seqToLengths(seq) {
             if (!seq.length) return [];
@@ -71,7 +302,6 @@ const BaccaratApp = (function() {
             lengths.push(cur);
             return lengths;
         },
-        // 陣列轉矩陣 (供 UI 渲染)
         seqToMatrix(seq) {
             let m = [], c = -1, last = null;
             seq.forEach(color => {
@@ -164,7 +394,6 @@ const BaccaratApp = (function() {
 
             if (predictions.length === 0) return null;
 
-            // 結算當前引擎權重
             let scoreRED = 0, scoreBLUE = 0;
             predictions.forEach(p => p.target === 'RED' ? scoreRED += p.weight : scoreBLUE += p.weight);
             
@@ -336,7 +565,6 @@ const BaccaratApp = (function() {
 
             document.getElementById('analysisGrid').innerHTML = `<div class="analysis-cores">${gridHtml}</div>`;
 
-            // 更新最終決策面板
             let finalTargetEl = document.getElementById('finalTarget');
             let finalReasonEl = document.getElementById('finalReason');
 
@@ -364,7 +592,6 @@ const BaccaratApp = (function() {
         }
     };
 
-    // --- 5. 對外開放的 API (Controllers) ---
     return {
         init() { UI.updateAll(); },
         record(result) {
@@ -398,16 +625,12 @@ const BaccaratApp = (function() {
     };
 })();
 
-// ============================================
-// 全域函式綁定 (無縫橋接 HTML onclick 事件)
-// ============================================
 window.recordResult = (res) => BaccaratApp.record(res);
 window.undoRecord = () => BaccaratApp.undo();
 window.clearRecords = () => BaccaratApp.clear();
 window.loadBatchInput = () => BaccaratApp.loadBatch(document.getElementById("batchInput").value.trim());
 window.handleKeyPress = (e) => { if (e.key === 'Enter') window.loadBatchInput(); };
 
-// 初始化系統啟動
 BaccaratApp.init();
 </script>
 </body>
