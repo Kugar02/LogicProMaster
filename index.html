@@ -486,7 +486,7 @@
         let normalReason = "", reverseReason = "";
         
         // 大龍邏輯
-        if (curLen >= 6) {
+        if (curLen >= 7) {
             reverseWeight += 45; normalWeight += 5;
             reverseReason = `【大龍極限反打】長連達極限 (長度${curLen})，破路反向權重極高。`;
         } else if (curLen >= 4) {
@@ -511,10 +511,10 @@
             reverseWeight += 40; normalWeight += 10;
             reverseReason = `【長雙跳極限反打】雙跳達 ${completedDoubles} 次，預測變盤斷雙跳。`;
         } else if (curLen === 2 && completedDoubles >= 3) {
-            reverseWeight += 12; normalWeight += 38;
+            reverseWeight += 38; normalWeight += 12;
             reverseReason = `【長雙跳極限反打】雙跳達極限，預測變盤轉長連。`;
         } else if (curLen === 1 && completedDoubles >= 2) {
-            normalWeight += 15; reverseWeight += 30;
+            normalWeight += 30; reverseWeight += 15;
             normalReason = `【雙跳順勢】雙跳成形，順勢補齊權重高。`;
         } else if (curLen === 2 && completedDoubles >= 1) {
             normalWeight += 25; reverseWeight += 15;
