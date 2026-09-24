@@ -420,6 +420,64 @@
         return grid;
     }
 
+    function evaluateVolatility(pureHistory) {
+        if (pureHistory.length < 5) return { chops: 0, isChoppy: false };
+        let recent15 = pureHistory.slice(-15);
+        let directionChanges = 0;
+        for (let i = 1; i < recent15.length; i++) {
+            if (recent15[i] !== recent15[i-1]) directionChanges++;
+        }
+        return { chops: directionChanges, isChoppy: (directionChanges / (recent15.length - 1)) >= 0.6 };
+    }
+
+    function simulateIndependentTieProbability(history) {
+        if (history.length < 5) return { active: false, percent: 0, reason: "數據不足，無法執行和局預測", betAdvice: "等待數據", adviceClass: "low", tagClass: "tag-N" };
+        
+        let tieCount = history.filter(x => x === 'T').length;
+        let baseProb = tieCount / history.length;
+        let recent10 = history.slice(-10);
+        let recentTieCount = recent10.filter(x => x === 'T').length;
+        let recentProb = recentTieCount / 10;
+        
+        let combinedProb = (baseProb * 0.4) + (recentProb * 0.6);
+        if (combinedProb < 0.05) combinedProb = 0.09;
+        
+        let hits = 0;
+        const ITERS = 100000;
+        for(let i=0; i<ITERS; i++) {
+            let noise = (Math.random() - 0.5) * 0.06;
+            if (Math.random() < (combinedProb + noise)) hits++;
+        }
+        let finalPct = (hits / ITERS) * 100;
+
+        let lastTieIndex = history.lastIndexOf('T');
+        let handsSinceLastTie = lastTieIndex === -1 ? history.length : (history.length - 1 - lastTieIndex);
+
+        let reason = `AI 已模擬 10 萬局未來演進。依據本靴全局數據 (${tieCount}次和) 及近期波動，預測下一局出現「和局」機率為 ${finalPct.toFixed(1)}%。\n`;
+        let betAdvice = "";
+        let adviceClass = "low";
+        let tagClass = "tag-N";
+
+        if (finalPct >= 22 || (finalPct >= 18 && handsSinceLastTie >= 8)) {
+            betAdvice = "🎯 高賠率狙擊：建議下注 1 單位";
+            adviceClass = "high";
+            tagClass = "tag-SNIPER";
+            reason += `🔥 【出手門檻達成】目前距離上次和局已 ${handsSinceLastTie} 局，機率與間距壓力雙重疊加，強烈建議出手打和！`;
+        } else if (finalPct >= 15) {
+            betAdvice = "⚠️ 輕注試探：建議下注 0.5 單位";
+            adviceClass = "mid";
+            tagClass = "tag-T";
+            reason += `💡 【和局機率浮現】目前距離上次和局已 ${handsSinceLastTie} 局，機率正在升溫，可嘗試輕注小博。`;
+        } else {
+            betAdvice = "🛑 嚴格觀望 (不打和)";
+            adviceClass = "low";
+            tagClass = "tag-N";
+            reason += `📉 目前和局機率偏低 (距離上次和局 ${handsSinceLastTie} 局)，和局賠率雖高但無優勢，建議保留資金。`;
+        }
+
+        return { active: true, percent: finalPct.toFixed(1), reason: reason, betAdvice: betAdvice, adviceClass: adviceClass, tagClass: tagClass };
+    }
+
     // ==========================================
     // 核心邏輯重構：正向 vs 反向 權重對抗判定
     // ==========================================
@@ -510,9 +568,6 @@
         else if (numCols >= 2 && l2===2 && l1===3) { staticTarget = oppItem; staticWeight = 82; staticReason = `【2-3 反打】長度超越前列，預測即將轉向。`; }
         else if (numCols >= 2 && l2===1 && l1===2) { staticTarget = oppItem; staticWeight = 80; staticReason = `【1房2廳】前單後雙規律，預測即將轉向 (反打)。`; }
         else if (numCols >= 2 && l2===2 && l1===1) { staticTarget = oppItem; staticWeight = 80; staticReason = `【2房1廳】前雙後單規律，預測跳向延續震盪。`; }
-        else if (numCols >= 3 && l3===3 && l2===1 && l1===3) { staticTarget = oppItem; staticWeight = 88; staticReason = `【3-1-3 反打】長度達區塊極限，觸發變盤反打。`; }
-        else if (numCols >= 3 && l3===1 && l2===3 && l1===1) { staticTarget = oppItem; staticWeight = 88; staticReason = `【1-3-1 反打】長度達區塊極限，觸發變盤反打。`; }
-        
 
         // 權重對抗決策機制
         let normW = evalResult.normalWeight;
@@ -615,6 +670,33 @@
         let hasResonance = false, resTarget = null;
         if (lowers.every(t => t === 'B')) { hasResonance = true; resTarget = 'B'; bScore += 80; valid++; }
         if (lowers.every(t => t === 'P')) { hasResonance = true; resTarget = 'P'; pScore += 80; valid++; }
+
+        // AI 和局隱性影響分析機制
+        let tieInfluenceText = "";
+        let bAfterTie = 0, pAfterTie = 0;
+        for(let i = 0; i < history.length - 1; i++) {
+            if(history[i] === 'T') {
+                for(let j = i + 1; j < history.length; j++) {
+                    if(history[j] === 'B') { bAfterTie++; break; }
+                    if(history[j] === 'P') { pAfterTie++; break; }
+                }
+            }
+        }
+        let lastItem = history[history.length - 1];
+        let secondLastItem = history.length >= 2 ? history[history.length - 2] : null;
+        let tieRecent = (lastItem === 'T' || secondLastItem === 'T');
+
+        if (tieRecent && (bAfterTie > 0 || pAfterTie > 0)) {
+            if (bAfterTie > pAfterTie) {
+                bScore += 15;
+                tieInfluenceText += `\n👻【和局隱性影響】偵測到本靴和局後高機率開莊，莊家權重隱性 +15 分。`;
+            } else if (pAfterTie > bAfterTie) {
+                pScore += 15;
+                tieInfluenceText += `\n👻【和局隱性影響】偵測到本靴和局後高機率開閒，閒家權重隱性 +15 分。`;
+            } else {
+                bScore *= 0.9; pScore *= 0.9;
+            }
+        }
 
         let recent10 = history.slice(-10);
         let tieCountRecent10 = recent10.filter(x => x === 'T').length;
