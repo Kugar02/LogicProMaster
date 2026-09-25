@@ -3,150 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卓天尊享商城 - 司機專屬大數據平台</title>
-    <!-- 引入 Tailwind CSS 快速佈局 -->
+    <title>卓天尊享商城 - 獨立前置原型系統</title>
+    <!-- 引入 Tailwind CSS 4.0 進行極速流暢佈局 -->
     <script src="https://jsdelivr.net"></script>
+    <style>
+        /* 滾動條優化，適合的士司機手機操作 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-slate-100 font-sans text-slate-950 pb-12">
 
-    <!-- 頂部導航 -->
-    <header class="bg-yellow-500 text-black p-4 shadow-md sticky top-0 z-50">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold tracking-wider">🚖 卓天尊享商城</h1>
-            <span class="text-xs bg-black text-white px-2 py-1 rounded">車隊官方自研版 (MVP)</span>
+    <!-- 頂部官方 Banner -->
+    <header class="bg-amber-400 text-black px-4 py-3 shadow-md sticky top-0 z-50 flex justify-between items-center">
+        <div>
+            <h1 class="text-lg font-black tracking-wide">🚖 卓天尊享商城</h1>
+            <p class="text-[10px] font-bold text-amber-950">AI 大數據車品適配平台 (獨立前置版)</p>
         </div>
+        <span class="text-[10px] bg-black text-amber-400 px-2 py-1 rounded-full font-bold">Server 獨立運行中</span>
     </header>
 
-    <!-- 主體內容 -->
-    <main class="container mx-auto p-4 max-w-xl">
-        
-        <!-- AI 智能搜索框 (支持語音) -->
-        <div class="bg-white p-4 rounded-xl shadow-sm mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2">🤖 AI 司機智能助理 (支援廣東話口語)：</label>
+    <main class="container mx-auto p-4 max-w-md">
+
+        <!-- 核心功能區：1688 AI 大數據自動篩選器 -->
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-2xl shadow-xl mb-5">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-sm font-bold flex items-center gap-1.5 text-amber-400">
+                    <span>🤖</span> AI 1688 大數據選品引擎
+                </h2>
+                <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded">自動化模組</span>
+            </div>
+            <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+                本系統會全自動掃描 1688 源頭工廠，過濾低分商家，並將簡體術語及「左軚」車品自動**適配為香港右軚的士專用**。
+            </p>
+            
+            <!-- 模擬啟動按鈕 -->
+            <button id="scanBtn" onclick="runAIScan()" class="w-full bg-amber-400 hover:bg-amber-300 text-black font-black text-sm py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                ⚡ 立即啟動 AI 掃描 1688 源頭貨源
+            </button>
+
+            <!-- AI 運行狀態日誌展示（動態視覺效果） -->
+            <div id="aiLogBox" class="hidden mt-4 bg-black/50 border border-slate-700 rounded-xl p-3 font-mono text-[11px] text-emerald-400 space-y-1 max-h-32 overflow-y-auto no-scrollbar">
+                <!-- 由 JS 動態注入 -->
+            </div>
+        </div>
+
+        <!-- AI 智能場景語音/文字搜索框 -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-slate-200/60">
+            <label class="block text-slate-700 text-xs font-bold mb-2">💡 司機智能語意搜尋 (支援廣東話口語)：</label>
             <div class="relative flex items-center">
-                <input id="searchInput" type="text" placeholder="例：下大雨睇唔清 / 交更車廂有煙味..." 
-                       class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm">
-                <!-- 麥克風按鈕 -->
-                <button id="voiceBtn" class="absolute right-3 text-gray-500 hover:text-red-500 focus:outline-none" title="語音輸入">
+                <input id="searchInput" type="text" oninput="handleSearch()" placeholder="例：落大雨睇唔清 / 隻手好酸 / 車廂好臭..." 
+                       class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 text-xs font-medium">
+                <button onclick="startVoiceRecognition()" class="absolute right-3 text-slate-400 hover:text-red-500 focus:outline-none text-base" title="語音輸入">
                     🎤
                 </button>
             </div>
         </div>
 
         <!-- 的士司機專屬：場景快選標籤 (Tags Filter) -->
-        <div class="mb-4">
-            <p class="text-xs text-gray-500 font-bold mb-2 uppercase tracking-wider">按日常駕駛場景快速篩選：</p>
-            <div class="flex flex-wrap gap-2" id="tagContainer">
-                <button onclick="filterByTag('')" class="tag-btn bg-black text-white text-xs px-3 py-1.5 rounded-full font-medium">全部商品</button>
-                <button onclick="filterByTag('夜更提神')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#夜更提神 💊</button>
-                <button onclick="filterByTag('雨天視野')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#雨天視野 🌧️</button>
-                <button onclick="filterByTag('交更除臭')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#交更除臭 🧼</button>
-                <button onclick="filterByTag('腰酸骨痛')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#腰酸骨痛 🩹</button>
-                <button onclick="filterByTag('車載快充')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#車載快充 📱</button>
+        <div class="mb-5">
+            <p class="text-[11px] text-slate-500 font-bold mb-2 uppercase tracking-wider">按日常駕駛場景標籤篩選：</p>
+            <div class="flex flex-wrap gap-1.5" id="tagContainer">
+                <button onclick="filterByTag('')" class="tag-btn bg-black text-white text-xs px-3 py-2 rounded-xl font-bold shadow-sm">全部商品</button>
+                <button onclick="filterByTag('雨天視野')" class="tag-btn bg-white text-slate-700 border border-slate-200/80 text-xs px-3 py-2 rounded-xl font-bold hover:bg-slate-50">#雨天視野 🌧️</button>
+                <button onclick="filterByTag('交更除臭')" class="tag-btn bg-white text-slate-700 border border-slate-200/80 text-xs px-3 py-2 rounded-xl font-bold hover:bg-slate-50">#交更除臭 🧼</button>
+                <button onclick="filterByTag('腰酸骨痛')" class="tag-btn bg-white text-slate-700 border border-slate-200/80 text-xs px-3 py-2 rounded-xl font-bold hover:bg-slate-50">#腰酸骨痛 🩹</button>
+                <button onclick="filterByTag('車載快充')" class="tag-btn bg-white text-slate-700 border border-slate-200/80 text-xs px-3 py-2 rounded-xl font-bold hover:bg-slate-50">#車載快充 📱</button>
             </div>
         </div>
 
-        <!-- 商品/套餐 列表展示區域 -->
-        <div id="productGrid" class="space-y-4">
-            <!-- 數據將由 JavaScript 動態渲染載入 -->
+        <!-- 核心商品與大數據套餐展示區域 -->
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-xs font-black text-slate-500 uppercase tracking-wider">AI 大數據整合推薦</h3>
+            <span id="productCount" class="text-[11px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-md">4 個項目</span>
+        </div>
+        
+        <div id="productGrid" class="space-y-3.5">
+            <!-- 數據將由 JavaScript 純前端渲染載入 -->
         </div>
 
     </main>
 
-    <!-- 前端互動與 API 異步請求邏輯 -->
+    <!-- 純前端核心邏輯 Script -->
     <script>
-        let currentTag = '';
-        let searchTimeout = null;
-
-        // 頁面初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            loadProducts();
-
-            // 監聽輸入框，實現動態 AI 篩選（防抖處理）
-            document.getElementById('searchInput').addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    loadProducts(currentTag, e.target.value);
-                }, 300); // 停止輸入 300 毫秒後觸發 AI 篩選
-            });
-
-            // 語音識別功能 (Web Speech API)
-            const voiceBtn = document.getElementById('voiceBtn');
-            const searchInput = document.getElementById('searchInput');
-            
-            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                const recognition = new SpeechRecognition();
-                recognition.lang = 'zh-HK'; // 設定為廣東話/香港粵語
-                
-                voiceBtn.addEventListener('click', () => {
-                    recognition.start();
-                    voiceBtn.innerText = '🛑';
-                });
-
-                recognition.onresult = (event) => {
-                    const text = event.results[0][0].transcript;
-                    searchInput.value = text;
-                    loadProducts(currentTag, text);
-                };
-
-                recognition.onend = () => {
-                    voiceBtn.innerText = '🎤';
-                };
-            } else {
-                voiceBtn.style.display = 'none'; // 瀏覽器不支援則隱藏
+        // 1. 預設的香港的士適配虛擬數據庫
+        const INITIAL_PRODUCTS = [
+            {
+                "id": 1,
+                "name": "【卓天尊享】香港的士專用（右軚版）高壽命矽膠水撥膠條 (一對裝)",
+                "price": 38,
+                "tags": ["雨天視野"],
+                "desc": "專為香港的士打造。AI 已自動過濾內地左軚版，精準適配金豐 Hybrid / 石油氣車，雨天搶單視野極清。",
+                "source": "1688車品工廠直供 (月銷 1.5萬件)",
+                "type": "單品"
+            },
+            {
+                "id": 2,
+                "name": "【交更必備】營業級銀離子車廂深層除味噴霧 (特濃去煙味/嘔吐物)",
+                "price": 45,
+                "tags": ["交更除臭"],
+                "desc": "AI 篩選天貓車品榜 Top 1 貨源。繁體化翻譯，3分鐘消滅車廂內煙味及汗臭，交更無投訴。",
+                "source": "廣州環保化學雲倉 (4.9星高評商家)",
+                "type": "單品"
+            },
+            {
+                "id": 3,
+                "name": "【夜更回血】日本久光製藥 專業級長效鎮痛貼 (14片大包裝)",
+                "price": 68,
+                "tags": ["腰酸骨痛"],
+                "desc": "針對開車長達 8 小時以上的職業勞損。強效消炎止痛，老司機必備回血神貼。",
+                "source": "跨境大健康分銷倉 (正品保證)",
+                "type": "單品"
+            },
+            {
+                "id": 4,
+                "name": "【大數據自動整合】雨季安全防禦大套裝 (水撥膠條 + 去油膜玻璃水)",
+                "price": 60,
+                "tags": ["雨天視野"],
+                "desc": "【AI 大數據自動打包套餐】結合工廠大貨，比單買激省30%。一次搞定擋風玻璃油膜與刮水問題。",
+                "source": "AI 自動整合源頭工廠套餐",
+                "type": "套餐"
             }
-        });
+        ];
 
-        // 標籤切換
-        function filterByTag(tag) {
-            currentTag = tag;
-            document.getElementById('searchInput').value = ''; // 切換標籤時清空搜索
-            loadProducts(tag, '');
-            
-            // 更新標籤按鈕高亮樣式
-            document.querySelectorAll('.tag-btn').forEach(btn => {
-                btn.classList.remove('bg-black', 'text-white');
-                btn.classList.add('bg-white', 'text-gray-700');
-            });
-            event.target.classList.remove('bg-white', 'text-gray-700');
-            event.target.classList.add('bg-black', 'text-white');
-        }
+        let activeProducts = [...INITIAL_PRODUCTS];
+        let currentTag = '';
 
-        // 異步請求後端 Server 的 AI 篩選接口
-        async function loadProducts(tag = '', search = '') {
+        // 2. 純前端 AI 語意映射表（模擬本地輕量自然語言處理）
+        const AI_SEMANTIC_RULES = {
+            "落雨": "雨天視野", "大雨": "雨天視野", "睇唔清": "雨天視野", "水撥": "雨天視野", "玻璃": "雨天視野",
+            "好臭": "交更除臭", "煙味": "交更除臭", "交更": "交更除臭", "異味": "交更除臭",
+            "腰痛": "腰酸骨痛", "好累": "腰酸骨痛", "頸痛": "腰酸骨痛", "腳痛": "腰酸骨痛",
+            "電話": "車載快充", "手機": "車載快充", "差電": "車載快充", "充電": "車載快充"
+        };
+
+        // 頁面加載完成後自動渲染
+        window.onload = () => {
+            renderProducts(activeProducts);
+        };
+
+        // 渲染商品列表的函數
+        function renderProducts(products) {
             const grid = document.getElementById('productGrid');
-            grid.innerHTML = '<div class="text-center text-gray-500 text-sm py-8">AI 正在篩選整合全網大數據車品...</div>';
+            document.getElementById('productCount').innerText = `${products.length} 個項目`;
+            
+            if (products.length === 0) {
+                grid.innerHTML = `
+                    <div class="text-center text-slate-400 text-xs py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                        📭 找不到相關推薦，試試用其他字眼形容您的駕駛場景？
+                    </div>`;
+                return;
+            }
 
-            try {
-                const response = await fetch(`/api/products?tag=${tag}&search=${encodeURIComponent(search)}`);
-                const products = await response.json();
-
-                if (products.length === 0) {
-                    grid.innerHTML = '<div class="text-center text-gray-500 text-sm py-8">找不到相關推薦，試試換個場景形容？</div>';
-                    return;
-                }
-
-                grid.innerHTML = products.map(p => `
-                    <div class="bg-white rounded-xl p-4 shadow-sm flex gap-4 items-center">
-                        <img src="${p.img}" alt="${p.name}" class="w-24 h-24 object-cover rounded-lg bg-gray-100 flex-shrink-0">
-                        <div class="flex-1 min-w-0">
-                            <span class="inline-block text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded mb-1 border border-red-200">${p.taobao_sales_mock}</span>
-                            <h3 class="text-sm font-bold text-gray-900 truncate">${p.name}</h3>
-                            <p class="text-xs text-gray-500 mt-1 line-clamp-2">${p.desc}</p>
-                            <div class="mt-2 flex justify-between items-center">
-                                <span class="text-lg font-black text-yellow-600"><span class="text-xs font-normal">HK$</span>${p.price}</span>
-                                <button class="bg-yellow-500 text-black text-xs font-bold px-3 py-1.5 rounded-lg active:bg-yellow-600">
-                                    查看詳情
-                                </button>
-                            </div>
+            grid.innerHTML = products.map(p => `
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/50 flex gap-3.5 items-center relative overflow-hidden">
+                    ${p.type === '套餐' ? '<div class="absolute top-0 left-0 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-br-lg shadow-sm">🔥 智能套餐</div>' : ''}
+                    <div class="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center text-2xl shrink-0">
+                        ${p.tags.includes('雨天視野') ? '🌧️' : p.tags.includes('交更除臭') ? '🧼' : p.tags.includes('腰酸骨痛') ? '🩹' : '📱'}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start gap-1">
+                            <span class="inline-block text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded border border-slate-200 max-w-[150px] truncate">${p.source}</span>
+                        </div>
+                        <h4 class="text-xs font-black text-slate-900 mt-1 truncate">${p.name}</h4>
+                        <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">${p.desc}</p>
+                        <div class="mt-2 flex justify-between items-center">
+                            <span class="text-base font-black text-amber-600"><span class="text-[10px] font-normal text-slate-400">卓天車隊價 HK$</span>${p.price}</span>
+                            <button class="bg-amber-400 hover:bg-amber-300 text-black text-[11px] font-black px-3 py-1.5 rounded-lg transition-colors active:scale-95">
+                                查看詳情
+                            </button>
                         </div>
                     </div>
-                `).join('');
-            } catch (error) {
-                grid.innerHTML = '<div class="text-center text-red-500 text-sm py-8">Server 連線失敗，請檢查後端是否啟動。</div>';
-            }
+                </div>
+            `).join('');
         }
-    </script>
-</body>
-</html>
+
+        // 模擬 AI 掃描 1688 流程的函數 (展現核心痛點)
+        function runAIScan() {
+            const logBox = document.getElementById('aiLogBox');
+            const btn = document.getElementById('scanBtn');
+            logBox.classList.remove('hidden');
+            logBox.innerHTML = '';
+            btn.disabled = true;
+            btn.innerText = "⏳ AI 正在深度適配中...";
+
+            const logs = [
+                "🔗 正在建立加密通道連接 1688 跨境大數據庫...",
+                "🔍 關鍵字搜索：[出租车用品]、[丰田金丰配件]、[司机长途劳损]...",
+                "📊 掃描完畢，共發現 1,420 款貨源。啟動 AI 質檢篩選機制...",
+                "❌ 已過濾 840 家評分低於 4.5 星、有虛假交易紀錄之商戶。",
+                "⚠️ 偵測到 320 款產品為「內地左軚車專用地毯/支架」，AI 已自動將其剔除！",
+                "🔤 啟動 LLM 繁體化與香港術語轉換：[雨刷 -> 水撥]、[雨刮精 -> 玻璃水]。",
+                
