@@ -1,121 +1,152 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant-HK">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卓天的士 - 司機專屬商城</title>
-    <!-- 引入 Tailwind CSS 方便快速排版 -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { font-family: 'Noto Sans HK', sans-serif; }
-    </style>
+    <title>卓天尊享商城 - 司機專屬大數據平台</title>
+    <!-- 引入 Tailwind CSS 快速佈局 -->
+    <script src="https://jsdelivr.net"></script>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-gray-100 font-sans">
 
-    <!-- 導航列 -->
-    <nav class="bg-yellow-400 p-4 shadow-md sticky top-0 z-50">
+    <!-- 頂部導航 -->
+    <header class="bg-yellow-500 text-black p-4 shadow-md sticky top-0 z-50">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-900">🚕 卓天的士商城</h1>
-            <ul class="flex space-x-4 font-semibold text-gray-800">
-                <li><a href="#electronics" class="hover:text-white transition">電子周邊</a></li>
-                <li><a href="#care" class="hover:text-white transition">車輛護理</a></li>
-                <li><a href="#health" class="hover:text-white transition">提神健康</a></li>
-            </ul>
-        </div>
-    </nav>
-
-    <!-- 頂部橫幅 (Hero Section) -->
-    <header class="bg-gray-900 text-white text-center py-16">
-        <div class="container mx-auto px-4">
-            <h2 class="text-4xl font-extrabold mb-4 text-yellow-400">專為的士司機打造的補給站</h2>
-            <p class="text-lg mb-8">充電空檔順便補貨，快速下單，支援 WhatsApp 智能系統對接！</p>
-            <a href="#electronics" class="bg-yellow-400 text-gray-900 px-6 py-3 rounded-full font-bold hover:bg-yellow-300 transition">立即選購</a>
+            <h1 class="text-xl font-bold tracking-wider">🚖 卓天尊享商城</h1>
+            <span class="text-xs bg-black text-white px-2 py-1 rounded">車隊官方自研版 (MVP)</span>
         </div>
     </header>
 
-    <!-- 商品分類區塊 -->
-    <main class="container mx-auto px-4 py-12">
+    <!-- 主體內容 -->
+    <main class="container mx-auto p-4 max-w-xl">
         
-        <!-- 1. 電子及接單周邊 -->
-        <section id="electronics" class="mb-16">
-            <h3 class="text-2xl font-bold border-l-4 border-yellow-400 pl-3 mb-6">電子及接單周邊</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- 商品卡片 1 -->
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">🔌</div>
-                    <h4 class="font-bold text-lg mb-2">極速雙孔車充 (支援快充)</h4>
-                    <p class="text-gray-500 text-sm mb-4">保持手機與接單系統時刻滿電，耐用不發燙。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 88</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
-                <!-- 商品卡片 2 -->
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">📱</div>
-                    <h4 class="font-bold text-lg mb-2">磁吸無線充電手機支架</h4>
-                    <p class="text-gray-500 text-sm mb-4">單手操作，穩固防震，適合各型號手機。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 128</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
-                <!-- 商品卡片 3 -->
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">📹</div>
-                    <h4 class="font-bold text-lg mb-2">高清夜視車 Cam 專用記憶卡</h4>
-                    <p class="text-gray-500 text-sm mb-4">高速讀寫，保障行車紀錄安全不漏秒。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 150</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
+        <!-- AI 智能搜索框 (支持語音) -->
+        <div class="bg-white p-4 rounded-xl shadow-sm mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">🤖 AI 司機智能助理 (支援廣東話口語)：</label>
+            <div class="relative flex items-center">
+                <input id="searchInput" type="text" placeholder="例：下大雨睇唔清 / 交更車廂有煙味..." 
+                       class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm">
+                <!-- 麥克風按鈕 -->
+                <button id="voiceBtn" class="absolute right-3 text-gray-500 hover:text-red-500 focus:outline-none" title="語音輸入">
+                    🎤
+                </button>
             </div>
-        </section>
+        </div>
 
-        <!-- 2. 車輛日常護理 -->
-        <section id="care" class="mb-16">
-            <h3 class="text-2xl font-bold border-l-4 border-yellow-400 pl-3 mb-6">車輛日常護理與消耗品</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">🧽</div>
-                    <h4 class="font-bold text-lg mb-2">高倍濃縮洗車液 (大容量)</h4>
-                    <p class="text-gray-500 text-sm mb-4">快速起泡，去污力強，不傷車漆。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 65</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">🌿</div>
-                    <h4 class="font-bold text-lg mb-2">車廂淨化除味香薰</h4>
-                    <p class="text-gray-500 text-sm mb-4">去除煙味及雜味，提升乘客好感度與小費機率。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 45</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
+        <!-- 的士司機專屬：場景快選標籤 (Tags Filter) -->
+        <div class="mb-4">
+            <p class="text-xs text-gray-500 font-bold mb-2 uppercase tracking-wider">按日常駕駛場景快速篩選：</p>
+            <div class="flex flex-wrap gap-2" id="tagContainer">
+                <button onclick="filterByTag('')" class="tag-btn bg-black text-white text-xs px-3 py-1.5 rounded-full font-medium">全部商品</button>
+                <button onclick="filterByTag('夜更提神')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#夜更提神 💊</button>
+                <button onclick="filterByTag('雨天視野')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#雨天視野 🌧️</button>
+                <button onclick="filterByTag('交更除臭')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#交更除臭 🧼</button>
+                <button onclick="filterByTag('腰酸骨痛')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#腰酸骨痛 🩹</button>
+                <button onclick="filterByTag('車載快充')" class="tag-btn bg-white text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-full font-medium hover:bg-gray-50">#車載快充 📱</button>
             </div>
-        </section>
+        </div>
 
-        <!-- 3. 司機職業健康 -->
-        <section id="health">
-            <h3 class="text-2xl font-bold border-l-4 border-yellow-400 pl-3 mb-6">司機職業健康與提神用品</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">⚡</div>
-                    <h4 class="font-bold text-lg mb-2">能量飲料套票 (買10送2)</h4>
-                    <p class="text-gray-500 text-sm mb-4">長時間駕駛必備，充電站自提，方便快捷。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 150</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition p-5 text-center">
-                    <div class="text-6xl mb-4">💺</div>
-                    <h4 class="font-bold text-lg mb-2">醫療級護脊腰墊</h4>
-                    <p class="text-gray-500 text-sm mb-4">人體工學設計，有效舒緩久坐帶來的腰背痠痛。</p>
-                    <div class="text-red-500 font-bold text-xl mb-4">HK$ 199</div>
-                    <button class="bg-gray-900 text-white w-full py-2 rounded hover:bg-gray-800">WhatsApp 下單</button>
-                </div>
-            </div>
-        </section>
+        <!-- 商品/套餐 列表展示區域 -->
+        <div id="productGrid" class="space-y-4">
+            <!-- 數據將由 JavaScript 動態渲染載入 -->
+        </div>
 
     </main>
 
-    <!-- 頁尾 -->
-    <footer class="bg-gray-900 text-gray-400 text-center py-6 mt-12">
-        <p>&copy; 2026 卓天的士服務公司. All rights reserved.</p>
-        <p class="text-sm mt-2">支援 AI 系統攝單 | 合作充電站自提服務</p>
-    </footer>
+    <!-- 前端互動與 API 異步請求邏輯 -->
+    <script>
+        let currentTag = '';
+        let searchTimeout = null;
 
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProducts();
+
+            // 監聽輸入框，實現動態 AI 篩選（防抖處理）
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    loadProducts(currentTag, e.target.value);
+                }, 300); // 停止輸入 300 毫秒後觸發 AI 篩選
+            });
+
+            // 語音識別功能 (Web Speech API)
+            const voiceBtn = document.getElementById('voiceBtn');
+            const searchInput = document.getElementById('searchInput');
+            
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'zh-HK'; // 設定為廣東話/香港粵語
+                
+                voiceBtn.addEventListener('click', () => {
+                    recognition.start();
+                    voiceBtn.innerText = '🛑';
+                });
+
+                recognition.onresult = (event) => {
+                    const text = event.results[0][0].transcript;
+                    searchInput.value = text;
+                    loadProducts(currentTag, text);
+                };
+
+                recognition.onend = () => {
+                    voiceBtn.innerText = '🎤';
+                };
+            } else {
+                voiceBtn.style.display = 'none'; // 瀏覽器不支援則隱藏
+            }
+        });
+
+        // 標籤切換
+        function filterByTag(tag) {
+            currentTag = tag;
+            document.getElementById('searchInput').value = ''; // 切換標籤時清空搜索
+            loadProducts(tag, '');
+            
+            // 更新標籤按鈕高亮樣式
+            document.querySelectorAll('.tag-btn').forEach(btn => {
+                btn.classList.remove('bg-black', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-700');
+            });
+            event.target.classList.remove('bg-white', 'text-gray-700');
+            event.target.classList.add('bg-black', 'text-white');
+        }
+
+        // 異步請求後端 Server 的 AI 篩選接口
+        async function loadProducts(tag = '', search = '') {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = '<div class="text-center text-gray-500 text-sm py-8">AI 正在篩選整合全網大數據車品...</div>';
+
+            try {
+                const response = await fetch(`/api/products?tag=${tag}&search=${encodeURIComponent(search)}`);
+                const products = await response.json();
+
+                if (products.length === 0) {
+                    grid.innerHTML = '<div class="text-center text-gray-500 text-sm py-8">找不到相關推薦，試試換個場景形容？</div>';
+                    return;
+                }
+
+                grid.innerHTML = products.map(p => `
+                    <div class="bg-white rounded-xl p-4 shadow-sm flex gap-4 items-center">
+                        <img src="${p.img}" alt="${p.name}" class="w-24 h-24 object-cover rounded-lg bg-gray-100 flex-shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <span class="inline-block text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded mb-1 border border-red-200">${p.taobao_sales_mock}</span>
+                            <h3 class="text-sm font-bold text-gray-900 truncate">${p.name}</h3>
+                            <p class="text-xs text-gray-500 mt-1 line-clamp-2">${p.desc}</p>
+                            <div class="mt-2 flex justify-between items-center">
+                                <span class="text-lg font-black text-yellow-600"><span class="text-xs font-normal">HK$</span>${p.price}</span>
+                                <button class="bg-yellow-500 text-black text-xs font-bold px-3 py-1.5 rounded-lg active:bg-yellow-600">
+                                    查看詳情
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                grid.innerHTML = '<div class="text-center text-red-500 text-sm py-8">Server 連線失敗，請檢查後端是否啟動。</div>';
+            }
+        }
+    </script>
 </body>
 </html>
