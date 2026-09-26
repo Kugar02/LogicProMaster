@@ -1,19 +1,15 @@
 import random
 
 def init_shoe(num_decks=8):
-    """初始化 8 副牌靴 (1-13 面值)"""
     return {val: num_decks * 4 for val in range(1, 14)}
 
 def get_baccarat_value(card):
     return card if card < 10 else 0
 
 def simulate_single_hand(shoe_cards):
-    """標準百家樂單局模擬"""
-    if len(shoe_cards) < 6:
-        return None
+    if len(shoe_cards) < 6: return None
     drawn = random.sample(shoe_cards, 6)
     c_p1, c_b1, c_p2, c_b2, c_p3, c_b3 = drawn
-    
     p_score = (get_baccarat_value(c_p1) + get_baccarat_value(c_p2)) % 10
     b_score = (get_baccarat_value(c_b1) + get_baccarat_value(c_b2)) % 10
     
@@ -32,7 +28,6 @@ def simulate_single_hand(shoe_cards):
             elif b_score == 4 and p_third in [2,3,4,5,6,7]: draw_b = True
             elif b_score == 5 and p_third in [4,5,6,7]: draw_b = True
             elif b_score == 6 and p_third in [6,7]: draw_b = True
-                
         if draw_b:
             b_score = (b_score + get_baccarat_value(c_b3)) % 10
 
@@ -66,60 +61,42 @@ def get_derived_road(cols, k):
                 else: derived.append('Red')
     return derived
 
-# ================= 1. 嚴格五大特徵分析器 (已刪除九宮格) =================
 def analyze_five_features_for_sequence(seq):
-    """
-    對指定序列嚴格執行五大特徵檢測：
-    1.單跳 2.雙跳 3.長龍 4.房廳 5.逢跳連
-    回傳：莊訊號得分, 閒訊號得分, 特徵診斷清單
-    """
     n = len(seq)
     b_score, p_score = 0, 0
     details = []
+    if n < 3: return 0, 0, ["數據不足"]
 
-    if n < 3:
-        return 0, 0, ["數據不充分 (需至少3局)"]
-
-    # 特徵 1: 單跳 (B-P-B-P...)
+    # 1.單跳 2.雙跳 3.長龍 4.房廳 5.逢跳連
     if n >= 3 and seq[-1] != seq[-2] and seq[-2] != seq[-3]:
         target = 'B' if seq[-1] == 'P' else 'P'
-        strength = 15
-        if target == 'B': b_score += strength
-        else: p_score += strength
-        details.append(f"單跳特徵: 強向【{'莊' if target=='B' else '閒'}】(+{strength})")
+        if target == 'B': b_score += 15
+        else: p_score += 15
+        details.append(f"單跳強向【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 2: 雙跳 (BB-PP-BB...)
     if n >= 4 and seq[-1] == seq[-2] and seq[-3] == seq[-4] and seq[-1] != seq[-3]:
         target = 'B' if seq[-1] == 'P' else 'P'
-        strength = 20
-        if target == 'B': b_score += strength
-        else: p_score += strength
-        details.append(f"雙跳特徵: 強向【{'莊' if target=='B' else '閒'}】(+{strength})")
+        if target == 'B': b_score += 20
+        else: p_score += 20
+        details.append(f"雙跳強向【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 3: 長龍 (BBB... 或 PPP...)
     streak = 1
     for i in range(n-2, -1, -1):
         if seq[i] == seq[-1]: streak += 1
         else: break
     if streak >= 3:
         target = seq[-1]
-        strength = streak * 8
-        if target == 'B': b_score += strength
-        else: p_score += strength
-        details.append(f"長龍特徵(連{streak}): 順勢【{'莊' if target=='B' else '閒'}】(+{strength})")
+        s = streak * 8
+        if target == 'B': b_score += s
+        else: p_score += s
+        details.append(f"長龍連{streak}【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 4: 房廳結構 (1房2廳 BPP BPP 或 2房1廳 BBP BBP)
-    if n >= 6:
-        block3 = seq[-3:]
-        prev_block3 = seq[-6:-3]
-        if block3 == prev_block3 and len(set(block3)) == 2:
-            predict_next = block3[0]
-            strength = 16
-            if predict_next == 'B': b_score += strength
-            else: p_score += strength
-            details.append(f"房廳週期: 看好【{'莊' if predict_next=='B' else '閒'}】(+{strength})")
+    if n >= 6 and seq[-3:] == seq[-6:-3] and len(set(seq[-3:])) == 2:
+        predict_next = seq[-3]
+        if predict_next == 'B': b_score += 16
+        else: p_score += 16
+        details.append(f"房廳週期【{'莊' if predict_next=='B' else '閒'}】")
 
-    # 特徵 5: 逢跳連 (跳後必連)
     if n >= 5:
         jumps_then_streak = True
         for i in range(2, n-1):
@@ -129,64 +106,43 @@ def analyze_five_features_for_sequence(seq):
                     break
         if jumps_then_streak and seq[-1] != seq[-2]:
             next_target = seq[-1]
-            strength = 18
-            if next_target == 'B': b_score += strength
-            else: p_score += strength
-            details.append(f"逢跳連特徵: 跟連【{'莊' if next_target=='B' else '閒'}】(+{strength})")
+            if next_target == 'B': b_score += 18
+            else: p_score += 18
+            details.append(f"逢跳連【{'莊' if next_target=='B' else '閒'}】")
 
     return b_score, p_score, details
 
-# ================= 2. 單一核心內部強弱決策 =================
 def evaluate_single_core_road(road_name, history, k=0):
     clean_hist = [x for x in history if x in ['B', 'P']]
-    
     if k == 0:
-        # 大路直接進行五大特徵分析
         b_score, p_score, details = analyze_five_features_for_sequence(clean_hist)
     else:
-        # 下三路：利用問路模擬下一局開莊與開閒對下三路紅/藍品質的五大特徵比對
         cols_b = build_logical_columns(history + ['B'])
-        derived_b = get_derived_road(cols_b, k)
-        
         cols_p = build_logical_columns(history + ['P'])
-        derived_p = get_derived_road(cols_p, k)
-        
-        b_score, _, det_b = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_b])
-        p_score, _, det_p = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_p])
-        details = [f"開莊導出特徵數: {len(det_b)}", f"開閒導出特徵數: {len(det_p)}"]
+        b_score, _, det_b = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in get_derived_road(cols_b, k)])
+        p_score, _, det_p = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in get_derived_road(cols_p, k)])
+        details = [f"開莊特徵: {len(det_b)}", f"開閒特徵: {len(det_p)}"]
 
     if b_score > p_score:
-        dominant = 'B'
-        net_score = -(b_score - p_score)
-        status = f"🔴 莊訊號較強 (莊 {b_score}分 vs 閒 {p_score}分)"
+        dominant, net_score = 'B', -(b_score - p_score)
+        status = f"🔴 莊強 (莊{b_score} vs 閒{p_score})"
     elif p_score > b_score:
-        dominant = 'P'
-        net_score = (p_score - b_score)
-        status = f"🔵 閒訊號較強 (閒 {p_score}分 vs 莊 {b_score}分)"
+        dominant, net_score = 'P', (p_score - b_score)
+        status = f"🔵 閒強 (閒{p_score} vs 莊{b_score})"
     else:
-        dominant = 'Neutral'
-        net_score = 0
-        status = "⚪ 莊閒訊號持平 (0 vs 0)"
+        dominant, net_score = 'Neutral', 0
+        status = "⚪ 訊號持平"
 
-    return {
-        'name': road_name,
-        'dominant': dominant,
-        'b_score': b_score,
-        'p_score': p_score,
-        'net_score': net_score,
-        'status': status,
-        'details': details
-    }
+    return {'name': road_name, 'dominant': dominant, 'b_score': b_score, 'p_score': p_score, 'net_score': net_score, 'status': status, 'details': details}
 
 def analyze_four_core_roads(history):
     return {
-        'big_road': evaluate_single_core_road('1. 大路核心 (Big Road)', history, k=0),
-        'big_eye': evaluate_single_core_road('2. 大眼仔路核心 (Big Eye)', history, k=1),
-        'small_road': evaluate_single_core_road('3. 小路核心 (Small Road)', history, k=2),
-        'roach_road': evaluate_single_core_road('4. 曱甴路核心 (Roach Road)', history, k=3)
+        'big_road': evaluate_single_core_road('1. 大路核心', history, k=0),
+        'big_eye': evaluate_single_core_road('2. 大眼仔路', history, k=1),
+        'small_road': evaluate_single_core_road('3. 小路核心', history, k=2),
+        'roach_road': evaluate_single_core_road('4. 曱甴路核心', history, k=3)
     }
 
-# ================= 3. 五層流水線整合主引擎 =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     if history_list is None: history_list = []
     if ai_targets is None: ai_targets = []
@@ -197,15 +153,19 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     remaining_cards = max(total_cards - cards_used, 52)
     remaining_decks = max(remaining_cards / 52.0, 1.0)
     
-    # --- 第 1 層：底座層 (Base Layer) ---
-    NATURAL_B = 45.86
-    NATURAL_P = 44.62
-    NATURAL_T = 9.52
+    NATURAL_B, NATURAL_P, NATURAL_T = 45.86, 44.62, 9.52
 
-    # --- 第 2 層：路型層 (Road Pattern Layer - 4大核心五特徵比對) ---
+    # 四大路單分析
     four_roads = analyze_four_core_roads(history_list)
     raw_road_score = sum(r['net_score'] for r in four_roads.values())
+    
+    # 計算路單訊號衝突度/亂度 (Chaos Dispersion)
+    dominants = [r['dominant'] for r in four_roads.values()]
+    b_dominants = dominants.count('B')
+    p_dominants = dominants.count('P')
+    is_high_entropy = (b_dominants == 2 and p_dominants == 2) # 四大路單 2莊2閒 極度混亂
 
+    # 連爆追蹤
     consecutive_losses = 0
     for tgt, actual in zip(reversed(ai_targets), reversed(history_list)):
         if tgt and tgt.get('target') and actual != 'T':
@@ -213,9 +173,18 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
             else: break
             
     is_break_active = False
+    is_defense_mode = False
+
+    # 🎯 動態自適應破路邏輯
     if consecutive_losses >= 2:
         is_break_active = True
-        final_road_score = -raw_road_score * 1.3
+        if is_high_entropy:
+            # 情況 A：盤口亂且連爆 -> 啟動高熵避險鎖 (權重強制歸零，強制觀望)
+            is_defense_mode = True
+            final_road_score = 0
+        else:
+            # 情況 B：盤口有明確指向但連爆 -> 進行平滑軟性反轉 (-0.8x 避免極端雙向抽擊)
+            final_road_score = -raw_road_score * 0.8
     else:
         final_road_score = raw_road_score
 
@@ -223,14 +192,12 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     l2_b = NATURAL_B - road_weight_bias
     l2_p = NATURAL_P + road_weight_bias
 
-    # --- 第 3 層：隱性層 (Implicit Tie Layer) ---
     actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
     tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15
-    
     l3_b = l2_b - tie_implicit_bias
     l3_p = l2_p + tie_implicit_bias
 
-    # --- 第 4 層：殘牌層 (Monte Carlo Layer - 100K) ---
+    # 100,000 次蒙地卡羅殘牌模擬
     raw_rc = (p_count - b_count) * 0.5
     avg_tc = raw_rc / remaining_decks
 
@@ -256,15 +223,15 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     post_mc_b = l3_b * 0.5 + mc_b_ratio * 0.5
     post_mc_p = l3_p * 0.5 + mc_p_ratio * 0.5
 
-    # --- 第 5 層：最終歸一化 (Normalization) ---
     total_weight = post_mc_b + post_mc_p
     final_b_pct = round((post_mc_b / total_weight) * 100, 1)
     final_p_pct = round((post_mc_p / total_weight) * 100, 1)
 
     recommend = "觀望 (停注)"
-    if final_b_pct >= 52.5:
-        recommend = "建議下注【莊】" + (" (⚔️智能破路反打)" if is_break_active else "")
-    elif final_p_pct >= 52.5:
-        recommend = "建議下注【閒】" + (" (⚔️智能破路反打)" if is_break_active else "")
+    if not is_defense_mode:
+        if final_b_pct >= 52.5:
+            recommend = "建議下注【莊】" + (" (⚔️動態反打)" if is_break_active else "")
+        elif final_p_pct >= 52.5:
+            recommend = "建議下注【閒】" + (" (⚔️動態反打)" if is_break_active else "")
 
     return avg_tc, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses
