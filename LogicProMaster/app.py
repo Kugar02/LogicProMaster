@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 載入五層整合大腦
+# 載入五層整合大腦 (engine.py)
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
@@ -26,20 +26,11 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 2. 資金與策略控制台 =================
-st.markdown("### ⚙️ 資金管理與注碼策略")
-c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
-st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
-st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=100, step=10)
-st.session_state.strategy = c3.selectbox("📈 選擇注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "馬丁格爾 (Martingale)"])
+# ================= 預先計算歷史統計與策略階段 =================
+fibo_idx = 0
+double_dragon_idx = 0
+tumbler_unit = 1  # 不倒翁: 1 -> 2 -> 3 循環
 
-if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True): 
-    st.session_state.history = []
-    st.session_state.ai_targets = []
-    st.rerun()
-
-# --- 動態重建策略統計 ---
-fibo_idx, martingale_mult = 0, 1
 total_bets, wins, losses, pnl = 0, 0, 0, 0.0
 
 for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
@@ -49,20 +40,98 @@ for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
         if tgt['target'] == actual:
             wins += 1
             pnl += (amt * 0.95) if actual == 'B' else amt
+            
+            # 獲勝時更新策略階段
             fibo_idx = max(0, fibo_idx - 2)
-            martingale_mult = 1
+            double_dragon_idx = 0  # 雙頭龍贏局重置
+            tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1 # 不倒翁贏進 1->2->3，達3後重置
         else:
             losses += 1
             pnl -= amt
+            
+            # 落敗時更新策略階段
             fibo_idx += 1
-            martingale_mult *= 2
+            double_dragon_idx += 1 # 雙頭龍輸局進階 (1,1,2,2,4,4,8,8...)
+            tumbler_unit = 1 # 不倒翁輸局保本重置為 1 注
+
+# 預先運行 AI 預測以計算「當前下注注碼」
+total_hands = len(st.session_state.history)
+b_count = st.session_state.history.count('B')
+p_count = st.session_state.history.count('P')
+t_count = st.session_state.history.count('T')
+
+current_bet = 0
+target = None
+recommend = "數據準備中..."
+four_roads_data = {}
+is_break_active = False
+consec_losses = 0
+final_b_pct, final_p_pct, actual_t_ratio = 45.8, 44.6, 9.5
+
+# 暫存策略選擇 (用於運算當前注碼)
+if 'strategy' not in st.session_state: st.session_state.strategy = "信號強弱 (1-2-3)"
+if 'base_unit' not in st.session_state: st.session_state.base_unit = 100
+
+if total_hands > 0 and run_monte_carlo_with_kelly:
+    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses = run_monte_carlo_with_kelly(
+        b_count, p_count, t_count, 
+        bankroll=st.session_state.bankroll, 
+        sim_count=100000, 
+        history_list=st.session_state.history,
+        ai_targets=st.session_state.ai_targets
+    )
+    
+    target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
+    
+    if target:
+        if st.session_state.strategy == "信號強弱 (1-2-3)":
+            diff = abs(final_b_pct - final_p_pct)
+            if diff >= 10: current_bet = st.session_state.base_unit * 3
+            elif diff >= 5: current_bet = st.session_state.base_unit * 2
+            else: current_bet = st.session_state.base_unit
+            
+        elif st.session_state.strategy == "斐波那契 (Fibonacci)":
+            fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+            idx = min(fibo_idx, len(fibo_seq)-1)
+            current_bet = st.session_state.base_unit * fibo_seq[idx]
+            
+        elif st.session_state.strategy == "雙頭龍":
+            dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
+            idx = min(double_dragon_idx, len(dd_seq)-1)
+            current_bet = st.session_state.base_unit * dd_seq[idx]
+            
+        elif st.session_state.strategy == "不倒翁投注法":
+            current_bet = st.session_state.base_unit * tumbler_unit
+
+# ================= 2. 資金管理、注碼策略與實時監控整合介面 =================
+st.markdown("### ⚙️ 資金管理與注碼策略 (實時整合監控)")
+
+c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
+st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
+st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=st.session_state.base_unit, step=10)
+st.session_state.strategy = c3.selectbox("📈 選擇注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "雙頭龍", "不倒翁投注法"])
+
+if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True): 
+    st.session_state.history = []
+    st.session_state.ai_targets = []
+    st.rerun()
+
+# 整合數據儀表板 (含當前注碼)
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("💰 當前總資產", f"${st.session_state.bankroll + pnl:.2f}")
+m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0 (觀望)")
+m3.metric("📊 策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
+m4.metric("🎯 AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
+m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
+
+st.markdown("---")
 
 # ================= 3. 輸入控制面板 =================
 st.markdown("### 🎛️ 開牌紀錄輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
 def record_hand(result):
-    st.session_state.ai_targets.append(st.session_state.get('pending_target', None))
+    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
     st.session_state.history.append(result)
     st.rerun()
 
@@ -93,44 +162,7 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
 st.markdown("---")
 st.markdown("### 🧠 最終權重預測建議 (五層流水線 Pipeline)")
 
-total_hands = len(st.session_state.history)
-b_count = st.session_state.history.count('B')
-p_count = st.session_state.history.count('P')
-t_count = st.session_state.history.count('T')
-st.session_state.pending_target = None
-
-four_roads_data = {}
-is_break_active = False
-consec_losses = 0
-
-if total_hands > 0 and run_monte_carlo_with_kelly:
-    with st.spinner("⚡ 執行中：[底座]➔[4核路型6特徵]➔[隱性]➔[10萬局殘牌MC]➔[歸一化]..."):
-        avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses = run_monte_carlo_with_kelly(
-            b_count, p_count, t_count, 
-            bankroll=st.session_state.bankroll, 
-            sim_count=100000, 
-            history_list=st.session_state.history,
-            ai_targets=st.session_state.ai_targets
-        )
-    
-    target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
-    bet_amount = 0
-    
-    if target:
-        if st.session_state.strategy == "信號強弱 (1-2-3)":
-            diff = abs(final_b_pct - final_p_pct)
-            if diff >= 10: bet_amount = st.session_state.base_unit * 3
-            elif diff >= 5: bet_amount = st.session_state.base_unit * 2
-            else: bet_amount = st.session_state.base_unit
-        elif st.session_state.strategy == "斐波那契 (Fibonacci)":
-            fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
-            idx = min(fibo_idx, len(fibo_seq)-1)
-            bet_amount = st.session_state.base_unit * fibo_seq[idx]
-        elif st.session_state.strategy == "馬丁格爾 (Martingale)":
-            bet_amount = st.session_state.base_unit * martingale_mult
-
-        st.session_state.pending_target = {'target': target, 'amount': bet_amount}
-
+if total_hands > 0:
     # 最終權重比重顯示盒
     st.markdown(f"""
     <div class="weight-box">
@@ -147,13 +179,6 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
 
     if is_break_active:
         st.error(f"🚨 **智能破路反打觸發**：連續 {consec_losses} 局正打爆路，四大路單權重已自動進行 Signal Inversion 反轉加權！")
-
-# 統計數據卡
-sm1, sm2, sm3, sm4 = st.columns(4)
-sm1.metric("策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
-sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
-sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
-sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
 # 顯示 4 大核心路單（各別具備六大特徵強弱比對）獨立診斷儀表板
 if four_roads_data:
