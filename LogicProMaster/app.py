@@ -18,7 +18,6 @@ st.markdown("""
         .pattern-card { background: #1e2029; border: 1px solid #333644; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
         .weight-box { background: #0f1015; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
         
-        /* 賭場風格統計橫條與問路按鈕樣式 */
         .stat-badge { font-weight: bold; padding: 6px 16px; border-radius: 6px; font-size: 16px; color: white; display: inline-flex; align-items: center; gap: 8px; }
         .stat-b { background-color: #e81123; }
         .stat-p { background-color: #0078d7; }
@@ -36,7 +35,7 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 預先計算歷史統計與策略階段 =================
+# ================= 預先計算歷史統計與資金策略 (保持不變) =================
 fibo_idx = 0
 double_dragon_idx = 0
 tumbler_unit = 1  # 不倒翁: 1 -> 2 -> 3 循環
@@ -73,13 +72,15 @@ recommend = "數據準備中..."
 four_roads_data = {}
 is_break_active = False
 consec_losses = 0
+markov_status = ""
+is_resonance = False
 final_b_pct, final_p_pct, actual_t_ratio = 45.8, 44.6, 9.5
 
 if 'strategy' not in st.session_state: st.session_state.strategy = "信號強弱 (1-2-3)"
 if 'base_unit' not in st.session_state: st.session_state.base_unit = 100
 
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses = run_monte_carlo_with_kelly(
+    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses, markov_status, is_resonance = run_monte_carlo_with_kelly(
         b_count, p_count, t_count, 
         bankroll=st.session_state.bankroll, 
         sim_count=100000, 
@@ -90,24 +91,27 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
     
     if target:
-        if st.session_state.strategy == "信號強弱 (1-2-3)":
-            diff = abs(final_b_pct - final_p_pct)
-            if diff >= 10: current_bet = st.session_state.base_unit * 3
-            elif diff >= 5: current_bet = st.session_state.base_unit * 2
-            else: current_bet = st.session_state.base_unit
-            
-        elif st.session_state.strategy == "斐波那契 (Fibonacci)":
-            fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
-            idx = min(fibo_idx, len(fibo_seq)-1)
-            current_bet = st.session_state.base_unit * fibo_seq[idx]
-            
-        elif st.session_state.strategy == "雙頭龍":
-            dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
-            idx = min(double_dragon_idx, len(dd_seq)-1)
-            current_bet = st.session_state.base_unit * dd_seq[idx]
-            
-        elif st.session_state.strategy == "不倒翁投注法":
-            current_bet = st.session_state.base_unit * tumbler_unit
+        if is_break_active:
+            current_bet = st.session_state.base_unit
+        else:
+            if st.session_state.strategy == "信號強弱 (1-2-3)":
+                diff = abs(final_b_pct - final_p_pct)
+                if diff >= 10: current_bet = st.session_state.base_unit * 3
+                elif diff >= 5: current_bet = st.session_state.base_unit * 2
+                else: current_bet = st.session_state.base_unit
+                
+            elif st.session_state.strategy == "斐波那契 (Fibonacci)":
+                fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+                idx = min(fibo_idx, len(fibo_seq)-1)
+                current_bet = st.session_state.base_unit * fibo_seq[idx]
+                
+            elif st.session_state.strategy == "雙頭龍":
+                dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
+                idx = min(double_dragon_idx, len(dd_seq)-1)
+                current_bet = st.session_state.base_unit * dd_seq[idx]
+                
+            elif st.session_state.strategy == "不倒翁投注法":
+                current_bet = st.session_state.base_unit * tumbler_unit
 
 # ================= 2. 資金管理與注碼策略整合面板 =================
 st.markdown("### ⚙️ 資金管理與注碼策略 (實時整合監控)")
@@ -131,28 +135,29 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 
 st.markdown("---")
 
-# ================= 3. AI 預測建議與 4 大核心分析 =================
-st.markdown("### 🧠 最終權重預測建議 (五層流水線 Pipeline)")
+# ================= 3. AI 預測建議與動態分析面板 =================
+st.markdown("### 🧠 最終權重預測建議 (含三路共振 / 馬爾可夫鏈 / 4/9點殘牌修正)")
 
 if total_hands > 0:
+    resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
     st.markdown(f"""
     <div class="weight-box">
-        <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}</h2>
+        <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}{resonance_tag}</h2>
         <p style="font-size: 18px; margin-top:8px;">
             <b>莊家歸一化權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
             <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [流水線順序] 底座(莊45.86%|閒44.62%) ➔ 四核5特徵路型 ➔ 隱性修正(和率{actual_t_ratio}%) ➔ 100K殘牌MC ➔ 歸一化
+            [{markov_status}] ｜ [殘牌修正] 關鍵點數 4/9點動態計算 ｜ 和率: {actual_t_ratio}%
         </small>
     </div>
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.error(f"🚨 **智能破路反打觸發**：連續 {consec_losses} 局正打爆路，四大路單權重已自動進行 Signal Inversion 反轉加權！")
+        st.error(f"🚨 **智能動態反打/避險啟動**：連續 {consec_losses} 局正打爆路，四大路單與馬爾可夫權重已自動進行動態平滑反轉！")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (各別跑滿五大特徵並取強者)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (動態共振與五大特徵強弱)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
@@ -169,10 +174,9 @@ if four_roads_data:
 
 st.markdown("---")
 
-# ================= 4. 歷史數據控制介面 (路紙/問路/開牌輸入) =================
+# ================= 4. 歷史數據控制介面 =================
 st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
 
-# 4A. 開牌紀錄輸入區
 st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
@@ -205,34 +209,7 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4B. 專業娛樂城路紙 (五路全開)
 st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
-
-def build_logical_columns(history):
-    cols, current_col, last_res = [], [], None
-    for res in history:
-        if res == 'T': continue
-        if res != last_res:
-            if current_col: cols.append(current_col)
-            current_col = [res]; last_res = res
-        else: current_col.append(res)
-    if current_col: cols.append(current_col)
-    return cols
-
-def get_derived_road(cols, k):
-    derived = []
-    for c in range(1, len(cols)):
-        for r in range(len(cols[c])):
-            if c < k: continue
-            if r == 0:
-                if c < k + 1: continue
-                derived.append('Red' if len(cols[c-1]) == len(cols[c-1-k]) else 'Blue')
-            else:
-                len_ref = len(cols[c-k])
-                if len_ref >= r + 1: derived.append('Red')
-                elif len_ref == r: derived.append('Blue')
-                else: derived.append('Red')
-    return derived
 
 def layout_road_matrix(data_list, rows=6):
     grid, curr_col, curr_row, start_col, last_val = {}, 0, 0, 0, None
@@ -304,7 +281,7 @@ with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(l
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
 
-# 4C. 底部統計數據橫條 + 莊閒問路卡片 (完全還原參考圖片佈局)
+# 底部統計數據橫條 + 莊閒問路卡片
 def get_ask_road_symbols(history, test_val):
     temp_hist = history + [test_val]
     temp_cols = build_logical_columns(temp_hist)
@@ -327,7 +304,6 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 col_stat_left, col_ask_right = st.columns([1, 1])
 
-# 左側：無對子統計橫條
 with col_stat_left:
     st.markdown(f"""
     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
@@ -338,7 +314,6 @@ with col_stat_left:
     </div>
     """, unsafe_allow_html=True)
 
-# 右側：莊閒問路按鈕
 with col_ask_right:
     st.markdown(f"""
     <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; margin-top: 5px;">
