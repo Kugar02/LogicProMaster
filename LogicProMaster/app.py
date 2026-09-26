@@ -1,364 +1,92 @@
 import streamlit as st
 import pandas as pd
 
-# 載入核心大腦 (engine.py)
 try:
-    from engine import run_monte_carlo_with_kelly
+    from engine import run_monte_carlo_with_kelly, get_engine_diagnostics
 except ImportError:
-    run_monte_carlo_with_kelly = None
+    run_monte_carlo_with_kelly = get_engine_diagnostics = None
 
-# ================= 1. 頁面配置與高對比黑魂主題 CSS =================
-st.set_page_config(page_title="Quantum Baccarat Dynamic OS", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title='Quantum Baccarat Dynamic OS', layout='wide', initial_sidebar_state='collapsed')
+st.markdown('''<style>
+#MainMenu,footer,header{visibility:hidden}.block-container{padding-top:.8rem!important;max-width:98%!important}
+.stButton>button{height:48px;font-size:18px;font-weight:bold;border-radius:8px}.pattern-card{background:#1e2029;border:1px solid #333644;border-radius:8px;padding:12px;margin-bottom:8px}.weight-box{background:#0f1015;border:2px solid #00ffcc;padding:15px;border-radius:10px;text-align:center;margin-bottom:15px}.debug-box{background:#151720;border:1px solid #444;padding:10px;border-radius:8px}.stat-badge{font-weight:bold;padding:6px 16px;border-radius:6px;font-size:16px;color:white;display:inline-flex;gap:8px}.stat-b{background:#e81123}.stat-p{background:#0078d7}.stat-t{background:#2ca02c}.stat-tot{background:#8d6e63}
+</style>''', unsafe_allow_html=True)
 
-st.markdown("""
-    <style>
-        #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-        .block-container { padding-top: 0.8rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
-        .stButton>button { height: 48px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-        .pattern-card { background: #1e2029; border: 1px solid #333644; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
-        .weight-box { background: #0f1015; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
-        
-        .stat-badge { font-weight: bold; padding: 6px 16px; border-radius: 6px; font-size: 16px; color: white; display: inline-flex; align-items: center; gap: 8px; }
-        .stat-b { background-color: #e81123; }
-        .stat-p { background-color: #0078d7; }
-        .stat-t { background-color: #2ca02c; }
-        .stat-tot { background-color: #8d6e63; }
-        
-        .ask-btn-box { padding: 6px 16px; border-radius: 8px; font-weight: bold; color: white; display: flex; align-items: center; gap: 10px; }
-        .ask-btn-b { background-color: #e81123; }
-        .ask-btn-p { background-color: #0078d7; }
-        .ask-icon-group { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.25); padding: 4px 10px; border-radius: 6px; }
-    </style>
-""", unsafe_allow_html=True)
+for key, default in [('history', []), ('ai_targets', []), ('bankroll', 10000), ('base_unit', 100), ('strategy', '信號強弱 (1-2-3)'), ('window', 50), ('alpha', .2)]:
+    if key not in st.session_state: st.session_state[key] = default
 
-if 'history' not in st.session_state: st.session_state.history = []
-if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
-if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
+history = st.session_state.history
+b_count, p_count, t_count = history.count('B'), history.count('P'), history.count('T')
+total_hands = len(history)
 
-# ================= 預先計算歷史統計與資金策略 =================
-fibo_idx = 0
-double_dragon_idx = 0
-tumbler_unit = 1
+st.markdown('### ⚙️ 資金管理與動態牌靴參數')
+c1,c2,c3,c4,c5 = st.columns([1.2,1.2,1.7,1.1,1.1])
+st.session_state.bankroll = c1.number_input('💰 本金', min_value=100, value=st.session_state.bankroll, step=500)
+st.session_state.base_unit = c2.number_input('💵 基礎注碼', min_value=10, value=st.session_state.base_unit, step=10)
+st.session_state.strategy = c3.selectbox('📈 注碼策略', ['信號強弱 (1-2-3)','斐波那契 (Fibonacci)','雙頭龍','不倒翁投注法'])
+st.session_state.window = c4.number_input('📊 動態窗口', 8, 200, st.session_state.window, 2)
+st.session_state.alpha = c5.number_input('EMA α', .05, .95, st.session_state.alpha, .05)
+if st.button('🗑️ 清空重置 (新靴)', use_container_width=True):
+    st.session_state.history=[]; st.session_state.ai_targets=[]; st.rerun()
 
-total_bets, wins, losses, pnl = 0, 0, 0, 0.0
-
-for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
-    if tgt and tgt['target'] and actual != 'T':
-        total_bets += 1
-        amt = tgt['amount']
-        if tgt['target'] == actual:
-            wins += 1
-            pnl += (amt * 0.95) if actual == 'B' else amt
-            
-            fibo_idx = max(0, fibo_idx - 2)
-            double_dragon_idx = 0
-            tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1
-        else:
-            losses += 1
-            pnl -= amt
-            
-            fibo_idx += 1
-            double_dragon_idx += 1
-            tumbler_unit = 1
-
-total_hands = len(st.session_state.history)
-b_count = st.session_state.history.count('B')
-p_count = st.session_state.history.count('P')
-t_count = st.session_state.history.count('T')
-
-current_bet = 0
-target = None
-recommend = "數據準備中..."
-four_roads_data = {}
-is_break_active = False
-consec_losses = 0
-markov_status = ""
-is_resonance = False
-confidence_pct = 50
-final_b_pct, final_p_pct, actual_t_ratio = 45.8, 44.6, 9.5
-
-if 'strategy' not in st.session_state: st.session_state.strategy = "信號強弱 (1-2-3)"
-if 'base_unit' not in st.session_state: st.session_state.base_unit = 100
-
-if total_hands > 0 and run_monte_carlo_with_kelly:
-    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses, markov_status, is_resonance, confidence_pct = run_monte_carlo_with_kelly(
-        b_count, p_count, t_count, 
-        bankroll=st.session_state.bankroll, 
-        sim_count=0, 
-        history_list=st.session_state.history,
-        ai_targets=st.session_state.ai_targets
-    )
-    
-    target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
-    
+current_bet = 0; target = None; four_roads = {}; is_break = False; losses = 0; confidence = 50; recommend = '數據準備中...'; final_b=45.8; final_p=44.6; tie_ratio=9.5; status=''
+if total_hands and run_monte_carlo_with_kelly:
+    _, final_b, final_p, tie_ratio, recommend, four_roads, is_break, losses, status, resonance, confidence = run_monte_carlo_with_kelly(b_count,p_count,t_count,bankroll=st.session_state.bankroll,history_list=history,ai_targets=st.session_state.ai_targets,window=st.session_state.window,alpha=st.session_state.alpha)
+    target = 'B' if '莊' in recommend else 'P' if '閒' in recommend else None
     if target:
-        if st.session_state.strategy == "信號強弱 (1-2-3)":
-            diff = abs(final_b_pct - final_p_pct)
-            if diff >= 10: current_bet = st.session_state.base_unit * 3
-            elif diff >= 5: current_bet = st.session_state.base_unit * 2
-            else: current_bet = st.session_state.base_unit
-            
-        elif st.session_state.strategy == "斐波那契 (Fibonacci)":
-            fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
-            idx = min(fibo_idx, len(fibo_seq)-1)
-            current_bet = st.session_state.base_unit * fibo_seq[idx]
-            
-        elif st.session_state.strategy == "雙頭龍":
-            dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
-            idx = min(double_dragon_idx, len(dd_seq)-1)
-            current_bet = st.session_state.base_unit * dd_seq[idx]
-            
-        elif st.session_state.strategy == "不倒翁投注法":
-            current_bet = st.session_state.base_unit * tumbler_unit
+        diff=abs(final_b-final_p)
+        if st.session_state.strategy=='信號強弱 (1-2-3)': current_bet=st.session_state.base_unit*(3 if diff>=10 else 2 if diff>=5 else 1)
+        elif st.session_state.strategy=='斐波那契 (Fibonacci)': current_bet=st.session_state.base_unit
+        elif st.session_state.strategy=='雙頭龍': current_bet=st.session_state.base_unit
+        else: current_bet=st.session_state.base_unit
 
-# ================= 2. 資金管理與注碼策略整合面板 =================
-st.markdown("### ⚙️ 資金管理與注碼策略 (實時整合監控)")
+m1,m2,m3,m4,m5=st.columns(5)
+m1.metric('💰 當前資產',f'${st.session_state.bankroll:.2f}');m2.metric('💵 建議注碼',f'${current_bet}');m3.metric('📜 總局數',f'{total_hands}');m4.metric('莊/閒',f'{b_count} / {p_count}');m5.metric('和局率',f'{tie_ratio}%')
+st.markdown('---')
 
-c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
-st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
-st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=st.session_state.base_unit, step=10)
-st.session_state.strategy = c3.selectbox("📈 選擇注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "雙頭龍", "不倒翁投注法"])
+if total_hands:
+    level = '強訊號' if confidence >= 75 else '中訊號' if confidence >= 50 else '弱訊號'
+    color = '#00ffcc' if level=='強訊號' else '#ffd166' if level=='中訊號' else '#aaa'
+    st.markdown(f'''<div class="weight-box"><h2 style="margin:0;color:#00ffcc">🎯 {recommend}</h2><p><b>莊 {final_b}%</b> ｜ <b>閒 {final_p}%</b> ｜ <b style="color:{color}">訊號等級：{level}</b> ｜ 可信度 {confidence}%</p><small>{status}</small></div>''', unsafe_allow_html=True)
+    if is_break: st.warning(f'⚔️ 反打機制生效：最近連敗 {losses} 局，請將訊號視為風險提示而非保證。')
 
-if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True): 
-    st.session_state.history = []
-    st.session_state.ai_targets = []
+if four_roads:
+    st.markdown('#### 🔍 四大核心：訊號與特徵排排連')
+    cols=st.columns(4)
+    for col,(key,item) in zip(cols,four_roads.items()):
+        ranking=item.get('feature_ranking',[])
+        ranking_text=' ｜ '.join(f"{x['feature']} {x['value']:+.1f}" for x in ranking) or '沒有足夠特徵'
+        with col:
+            st.markdown(f'''<div class="pattern-card"><b>{item['name']}</b><br><span>{item['status']}</span><br><small>訊號：{item.get('signal_strength','弱訊號')}<br>特徵排名：{ranking_text}</small></div>''',unsafe_allow_html=True)
+
+if total_hands and get_engine_diagnostics:
+    with st.expander('📈 牌靴波動圖／動態門檻／詳細診斷', expanded=True):
+        points=get_engine_diagnostics(history,st.session_state.ai_targets,st.session_state.window,st.session_state.alpha)
+        chart=pd.DataFrame(points).set_index('局數')
+        st.line_chart(chart[['weighted_score','big_road','big_eye','small_road','roach_road']])
+        st.dataframe(chart.tail(10), use_container_width=True)
+        st.caption('波動越大代表本靴各核心訊號分歧越大；動態門檻在樣本不足時會使用保守預設值。')
+
+st.markdown('---'); st.markdown('### 🎛️ 開牌紀錄與快捷輸入')
+def record(result):
+    st.session_state.ai_targets.append({'target':target,'amount':current_bet} if target else None); st.session_state.history.append(result); st.rerun()
+b1,b2,b3,b4=st.columns(4)
+if b1.button('🔴 開莊 (B)',use_container_width=True): record('B')
+if b2.button('🔵 開閒 (P)',use_container_width=True): record('P')
+if b3.button('🟢 開和 (T)',use_container_width=True): record('T')
+if b4.button('↩️ 撤銷上一手',use_container_width=True):
+    if st.session_state.history: st.session_state.history.pop(); st.session_state.ai_targets.pop()
     st.rerun()
+with st.expander('📝 批量輸入歷史賽果'):
+    batch=st.text_input('例如 BBPTP...')
+    if st.button('📥 載入'):
+        cleaned=[]
+        for char in batch:
+            if char.upper() in ('B','P','T'): cleaned.append(char.upper())
+            elif char in ('莊','庄'): cleaned.append('B')
+            elif char in ('閒','闲'): cleaned.append('P')
+            elif char=='和': cleaned.append('T')
+        if cleaned: st.session_state.history.extend(cleaned);st.session_state.ai_targets.extend([None]*len(cleaned));st.rerun()
 
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("💰 當前總資產", f"${st.session_state.bankroll + pnl:.2f}")
-m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0")
-m3.metric("📊 策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
-m4.metric("🎯 AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
-m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"${pnl:.2f}")
-
-st.markdown("---")
-
-# ================= 3. AI 預測建議與雙向矩陣面板 =================
-st.markdown("### 🧠 最終權重預測建議 (雙重 AI 自主學習引擎)")
-
-if total_hands > 0:
-    resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
-    st.markdown(f"""
-    <div class="weight-box">
-        <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}{resonance_tag}</h2>
-        <p style="font-size: 18px; margin-top:8px;">
-            <b>莊家歸一化權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
-            <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b> ｜ 
-            <b>訊號可信度指數：<span style="color:#00ffcc;">{confidence_pct}%</span></b>
-        </p>
-        <small style="color:#aaa;">
-            [{markov_status}]
-        </small>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if is_break_active:
-        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%)，已精準反轉方向執行反打！")
-
-if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (動態 AI 配比 + 獨立馬爾可夫)")
-    r_cols = st.columns(4)
-    r_keys = list(four_roads_data.keys())
-    for i, k in enumerate(r_keys):
-        item = four_roads_data[k]
-        color = "red" if item['dominant'] == 'B' else ("blue" if item['dominant'] == 'P' else "gray")
-        with r_cols[i]:
-            st.markdown(f"""
-            <div class="pattern-card">
-                <b>{item['name']}</b><br>
-                <span style="color:{color}; font-size:13px; font-weight:bold;">{item['status']}</span><br>
-                <small style="color:#aaa;">特徵與馬爾可夫: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
-            </div>
-            """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ================= 4. 歷史數據控制介面 =================
-st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
-
-def build_logical_columns(history):
-    cols, current_col, last_res = [], [], None
-    for res in history:
-        if res == 'T': continue
-        if res != last_res:
-            if current_col: cols.append(current_col)
-            current_col = [res]; last_res = res
-        else: current_col.append(res)
-    if current_col: cols.append(current_col)
-    return cols
-
-def get_derived_road(cols, k):
-    derived = []
-    for c in range(1, len(cols)):
-        for r in range(len(cols[c])):
-            if c < k: continue
-            if r == 0:
-                if c < k + 1: continue
-                derived.append('Red' if len(cols[c-1]) == len(cols[c-1-k]) else 'Blue')
-            else:
-                len_ref = len(cols[c-k])
-                if len_ref >= r + 1: derived.append('Red')
-                elif len_ref == r: derived.append('Blue')
-                else: derived.append('Red')
-    return derived
-
-def layout_road_matrix(data_list, rows=6):
-    grid, curr_col, curr_row, start_col, last_val = {}, 0, 0, 0, None
-    for item in data_list:
-        val = item['val'] if isinstance(item, dict) else item
-        if last_val is None:
-            last_val = val; grid[(curr_col, curr_row)] = item
-        elif val == last_val:
-            curr_row += 1
-            if curr_row >= rows or (curr_col, curr_row) in grid:
-                curr_row -= 1; curr_col += 1
-            grid[(curr_col, curr_row)] = item
-        else:
-            last_val = val; start_col += 1; curr_col = start_col
-            while (curr_col, 0) in grid: curr_col += 1
-            start_col = curr_col; curr_row = 0
-            grid[(curr_col, curr_row)] = item
-    return grid
-
-def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
-    html = f'<div style="display: grid; grid-template-columns: repeat({cols}, {cell_size}px); grid-template-rows: repeat({rows}, {cell_size}px); gap: 0; background: #fff; border: 1px solid #ccc; width: max-content;">'
-    for r in range(rows):
-        for c in range(cols):
-            cell = grid.get((c, r), None)
-            content = ""
-            if cell:
-                val = cell['val'] if isinstance(cell, dict) else cell
-                ties = cell.get('ties', 0) if isinstance(cell, dict) else 0
-                
-                if val in ['B', 'Red']: color = "#e81123"
-                elif val in ['P', 'Blue']: color = "#0078d7"
-                else: color = "#2ca02c"
-                
-                if road_type == "bead":
-                    bg = "#e81123" if val == 'B' else "#0078d7" if val == 'P' else "#2ca02c"
-                    txt = "莊" if val == 'B' else "閒" if val == 'P' else "和"
-                    content = f'<div style="width:20px;height:20px;background:{bg};color:white;border-radius:50%;font-size:10px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{txt}</div>'
-                elif road_type == "big":
-                    content = f'<div style="position:relative;width:16px;height:16px;border:2px solid {color};border-radius:50%;margin:auto;">'
-                    if ties > 0: content += f'<div style="position:absolute;width:20px;height:2px;background:#2ca02c;transform:rotate(-45deg);top:7px;left:-4px;"></div>'
-                    content += '</div>'
-                elif road_type == "big_eye": content = f'<div style="width:12px;height:12px;border:2px solid {color};border-radius:50%;margin:auto;"></div>'
-                elif road_type == "small": content = f'<div style="width:12px;height:12px;background:{color};border-radius:50%;margin:auto;"></div>'
-                elif road_type == "roach": content = f'<div style="width:16px;height:3px;background:{color};transform:rotate(-45deg);margin:auto;margin-top:8px;"></div>'
-                
-            html += f'<div style="border: 1px solid #eee; display: flex; align-items: center; justify-content: center;">{content}</div>'
-    html += '</div>'
-    return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
-
-def get_ask_road_symbols(history, test_val):
-    temp_hist = history + [test_val]
-    temp_cols = build_logical_columns(temp_hist)
-    e = get_derived_road(temp_cols, 1)
-    s = get_derived_road(temp_cols, 2)
-    r = get_derived_road(temp_cols, 3)
-    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
-
-def draw_ask_icon(val, r_type):
-    if not val: return "<div style='width:18px; height:18px;'></div>"
-    color = "#e81123" if val == 'Red' else "#0078d7"
-    if r_type == 'eye': return f"<div style='width:14px;height:14px;border:2px solid {color};border-radius:50%;'></div>"
-    if r_type == 'small': return f"<div style='width:14px;height:14px;background:{color};border-radius:50%;'></div>"
-    if r_type == 'roach': return f"<div style='width:14px;height:3px;background:{color};transform:rotate(-45deg);margin-top:5px;'></div>"
-
-# --- 4A. 開牌紀錄與快捷輸入 ---
-st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
-btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
-
-def record_hand(result):
-    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
-    st.session_state.history.append(result)
-    st.rerun()
-
-if btn_col1.button("🔴 開莊 (B)", use_container_width=True): record_hand('B')
-if btn_col2.button("🔵 開閒 (P)", use_container_width=True): record_hand('P')
-if btn_col3.button("🟢 開和 (T)", use_container_width=True): record_hand('T')
-if btn_col4.button("↩️ 撤銷上一手", use_container_width=True): 
-    if st.session_state.history: 
-        st.session_state.history.pop()
-        st.session_state.ai_targets.pop()
-    st.rerun()
-
-with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
-    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
-    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
-        cleaned = []
-        for char in batch_input:
-            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
-            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
-            elif char in ['T', 't', '和']: cleaned.append('T')
-        if cleaned:
-            st.session_state.history.extend(cleaned)
-            st.session_state.ai_targets.extend([None] * len(cleaned))
-            st.rerun()
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# --- 4B. 專業娛樂城路紙 (五路全開) ---
-st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
-
-big_road_list = []
-for item in st.session_state.history:
-    if item == 'T' and big_road_list: big_road_list[-1]['ties'] += 1
-    elif item != 'T': big_road_list.append({'val': item, 'ties': 0})
-        
-logical_cols = build_logical_columns(st.session_state.history)
-
-col_top1, col_top2 = st.columns([1, 2])
-with col_top1:
-    st.caption("珠盤路 (Bead Plate)")
-    bead_grid = {(i // 6, i % 6): res for i, res in enumerate(st.session_state.history)}
-    st.markdown(render_css_grid(bead_grid, cols=12, cell_size=28, road_type="bead"), unsafe_allow_html=True)
-with col_top2:
-    st.caption("大路 (Big Road)")
-    st.markdown(render_css_grid(layout_road_matrix(big_road_list), cols=30, cell_size=28, road_type="big"), unsafe_allow_html=True)
-
-st.caption("下三路 (Lower Three Roads)")
-col_bot1, col_bot2, col_bot3 = st.columns(3)
-with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 1)), cols=24, cell_size=18, road_type="big_eye"), unsafe_allow_html=True)
-with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
-with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
-
-# --- 4C. 底部統計數據橫條 + 莊閒問路卡片 ---
-ask_b = get_ask_road_symbols(st.session_state.history, 'B')
-ask_p = get_ask_road_symbols(st.session_state.history, 'P')
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-col_stat_left, col_ask_right = st.columns([1, 1])
-
-with col_stat_left:
-    st.markdown(f"""
-    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
-        <div class="stat-badge stat-b">莊 <span style="font-size:22px;">{b_count}</span></div>
-        <div class="stat-badge stat-p">閒 <span style="font-size:22px;">{p_count}</span></div>
-        <div class="stat-badge stat-t">和 <span style="font-size:22px;">{t_count}</span></div>
-        <div class="stat-badge stat-tot">總 <span style="font-size:22px;">{total_hands}</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_ask_right:
-    st.markdown(f"""
-    <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; margin-top: 5px;">
-        <div class="ask-btn-box ask-btn-b">
-            <span>莊問路</span>
-            <div class="ask-icon-group">
-                {draw_ask_icon(ask_b[0], 'eye')}
-                {draw_ask_icon(ask_b[1], 'small')}
-                {draw_ask_icon(ask_b[2], 'roach')}
-            </div>
-        </div>
-        <div class="ask-btn-box ask-btn-p">
-            <span>閒問路</span>
-            <div class="ask-icon-group">
-                {draw_ask_icon(ask_p[0], 'eye')}
-                {draw_ask_icon(ask_p[1], 'small')}
-                {draw_ask_icon(ask_p[2], 'roach')}
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown('---')
+st.markdown(f'''<div><span class="stat-badge stat-b">莊 {b_count}</span> <span class="stat-badge stat-p">閒 {p_count}</span> <span class="stat-badge stat-t">和 {t_count}</span> <span class="stat-badge stat-tot">總 {total_hands}</span></div>''',unsafe_allow_html=True)
