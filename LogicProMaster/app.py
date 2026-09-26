@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 載入極致動態大腦 (engine.py)
+# 載入核心大腦 (engine.py)
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
@@ -74,13 +74,14 @@ is_break_active = False
 consec_losses = 0
 markov_status = ""
 is_resonance = False
+confidence_pct = 50
 final_b_pct, final_p_pct, actual_t_ratio = 45.8, 44.6, 9.5
 
 if 'strategy' not in st.session_state: st.session_state.strategy = "信號強弱 (1-2-3)"
 if 'base_unit' not in st.session_state: st.session_state.base_unit = 100
 
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses, markov_status, is_resonance = run_monte_carlo_with_kelly(
+    avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses, markov_status, is_resonance, confidence_pct = run_monte_carlo_with_kelly(
         b_count, p_count, t_count, 
         bankroll=st.session_state.bankroll, 
         sim_count=0, 
@@ -136,7 +137,7 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 st.markdown("---")
 
 # ================= 3. AI 預測建議與動態分析面板 =================
-st.markdown("### 🧠 最終權重預測建議 (三路共振 / 二階馬爾可夫 / 高熵防禦)")
+st.markdown("### 🧠 最終權重預測建議 (主次權威階層 + 自信度指數)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -145,19 +146,20 @@ if total_hands > 0:
         <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}{resonance_tag}</h2>
         <p style="font-size: 18px; margin-top:8px;">
             <b>莊家歸一化權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
-            <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
+            <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b> ｜ 
+            <b>AI 訊號自信度：<span style="color:#00ffcc;">{confidence_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [{markov_status}] ｜ [和局隱性修正] 當前和率: {actual_t_ratio}%
+            [{markov_status}] ｜ [主次權威比重] 大路40% | 下三路各20% ｜ 和率: {actual_t_ratio}%
         </small>
     </div>
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.error(f"🚨 **智能動態反打/避險啟動**：連續 {consec_losses} 局正打爆路，四大路單與馬爾可夫權重已自動進行動態平滑反轉！")
+        st.info(f"💡 **訊號動態平滑微調中**：近局出現短線波動，系統已微調權重敏感度。")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (五大特徵強弱與三路共振)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (主次權威階層)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
