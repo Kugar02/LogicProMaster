@@ -137,7 +137,7 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 st.markdown("---")
 
 # ================= 3. AI 預測建議與動態分析面板 =================
-st.markdown("### 🧠 最終權重預測建議 (主次權威階層 + 自信度指數)")
+st.markdown("### 🧠 最終權重預測建議 (大路權威門閥 + 冷啟動防護)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -156,10 +156,10 @@ if total_hands > 0:
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.info(f"💡 **訊號動態平滑微調中**：近局出現短線波動，系統已微調權重敏感度。")
+        st.warning(f"🛡️ **動態高風控啟動**：連續 {consec_losses} 局正打未果，已提高進場門檻至 53.5% 並鎖定 1 個注碼單位防守。")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (主次權威階層)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (主次權威與規律度)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
@@ -170,7 +170,7 @@ if four_roads_data:
             <div class="pattern-card">
                 <b>{item['name']}</b><br>
                 <span style="color:{color}; font-size:13px; font-weight:bold;">{item['status']}</span><br>
-                <small style="color:#aaa;">五特徵明細: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
+                <small style="color:#aaa;">特徵明細: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
             </div>
             """, unsafe_allow_html=True)
 
