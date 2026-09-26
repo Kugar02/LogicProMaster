@@ -246,7 +246,25 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
         if target and target.get('target') and actual != 'T':
             if target['target'] != actual: losses += 1
             else: break
-    break_active = confidence < 40 or losses >= 2
+
+    # dynamic loss threshold based on window (larger window -> slightly larger tolerance)
+    dynamic_loss_thresh = max(2, int(max(2, window / 25)))
+
+    # dynamic break logic to avoid single/brief dips causing immediate反打
+    if confidence < 25:
+        break_active = True
+    else:
+        if level == '強訊號':
+            break_active = False
+        elif level == '中訊號':
+            break_active = (confidence < 50 and losses >= dynamic_loss_thresh)
+        else:  # 弱訊號
+            break_active = (confidence < 55 and losses >= max(1, dynamic_loss_thresh - 1))
+
+    # force-break if persistent losses exceed threshold regardless of level
+    if losses >= dynamic_loss_thresh and confidence < 65:
+        break_active = True
+
     final_score = -score * .75 if break_active else score
     macro_skew = (p_count - b_count) * .15
     bias = final_score / 100 * 15
@@ -258,4 +276,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     side = '莊' if final_b >= final_p else '閒'
     recommend = f"{'⚔️ 智能反打' if break_active else '🔥 強勢正打'}【{side}】"
     status = f'[動態牌靴分析] {level} ｜ EMA α={alpha:.2f} ｜ 牌靴偏態: {macro_skew:+.1f}%'
-    return 0.0, final_b, final_p, round((t_count / total * 100) if total else natural_t, 1), recommend, roads, break_active, losses, status, resonance, confidence
+
+    # return additional diagnostics: level & thresholds for UI
+    return 0.0, final_b, final_p, round((t_count / total * 100) if total else natural_t, 1), recommend, roads, break_active, losses, status, resonance, confidence, level, thresholds
