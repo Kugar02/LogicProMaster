@@ -66,11 +66,11 @@ def get_derived_road(cols, k):
                 else: derived.append('Red')
     return derived
 
-# ================= 1. 嚴格六大特徵分析器 =================
-def analyze_six_features_for_sequence(seq):
+# ================= 1. 嚴格五大特徵分析器 (已刪除九宮格) =================
+def analyze_five_features_for_sequence(seq):
     """
-    對指定序列嚴格執行六大特徵檢測：
-    1.單跳 2.雙跳 3.長龍 4.房廳 5.逢跳連 6.九宮格
+    對指定序列嚴格執行五大特徵檢測：
+    1.單跳 2.雙跳 3.長龍 4.房廳 5.逢跳連
     回傳：莊訊號得分, 閒訊號得分, 特徵診斷清單
     """
     n = len(seq)
@@ -134,54 +134,34 @@ def analyze_six_features_for_sequence(seq):
             else: p_score += strength
             details.append(f"逢跳連特徵: 跟連【{'莊' if next_target=='B' else '閒'}】(+{strength})")
 
-    # 特徵 6: 九宮格矩陣 (近 9 局空間平衡)
-    if n >= 9:
-        grid9 = seq[-9:]
-        b_cnt = grid9.count('B')
-        p_cnt = grid9.count('P')
-        if b_cnt > p_cnt + 2:
-            strength = 12
-            p_score += strength
-            details.append(f"九宮格修正: 看好【閒】(+{strength})")
-        elif p_cnt > b_cnt + 2:
-            strength = 12
-            b_score += strength
-            details.append(f"九宮格修正: 看好【莊】(+{strength})")
-
     return b_score, p_score, details
 
 # ================= 2. 單一核心內部強弱決策 =================
 def evaluate_single_core_road(road_name, history, k=0):
-    """
-    針對每個核心路單，跑滿六大特徵，比較莊 vs 閒強弱，
-    並將同一個方向較強者作為該核心的最終結果。
-    """
     clean_hist = [x for x in history if x in ['B', 'P']]
     
     if k == 0:
-        # 大路直接進行六大特徵分析
-        b_score, p_score, details = analyze_six_features_for_sequence(clean_hist)
+        # 大路直接進行五大特徵分析
+        b_score, p_score, details = analyze_five_features_for_sequence(clean_hist)
     else:
-        # 下三路：利用問路模擬下一局開莊與開閒對下三路紅/藍品質的六大特徵比對
+        # 下三路：利用問路模擬下一局開莊與開閒對下三路紅/藍品質的五大特徵比對
         cols_b = build_logical_columns(history + ['B'])
         derived_b = get_derived_road(cols_b, k)
         
         cols_p = build_logical_columns(history + ['P'])
         derived_p = get_derived_road(cols_p, k)
         
-        # 評估導出的紅筆 (整齊) 與藍筆 (跳路) 特徵
-        b_score, _, det_b = analyze_six_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_b])
-        p_score, _, det_p = analyze_six_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_p])
+        b_score, _, det_b = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_b])
+        p_score, _, det_p = analyze_five_features_for_sequence(['B' if x=='Red' else 'P' for x in derived_p])
         details = [f"開莊導出特徵數: {len(det_b)}", f"開閒導出特徵數: {len(det_p)}"]
 
-    # 精準判斷哪一個特徵方向訊號較強，作為該核心最終結論
     if b_score > p_score:
         dominant = 'B'
-        net_score = -(b_score - p_score) # 負數表示偏莊
+        net_score = -(b_score - p_score)
         status = f"🔴 莊訊號較強 (莊 {b_score}分 vs 閒 {p_score}分)"
     elif p_score > b_score:
         dominant = 'P'
-        net_score = (p_score - b_score) # 正數表示偏閒
+        net_score = (p_score - b_score)
         status = f"🔵 閒訊號較強 (閒 {p_score}分 vs 莊 {b_score}分)"
     else:
         dominant = 'Neutral'
@@ -208,10 +188,6 @@ def analyze_four_core_roads(history):
 
 # ================= 3. 五層流水線整合主引擎 =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
-    """
-    五層整合流水線：
-    [底座層] ➔ [路型層 (含破路)] ➔ [隱性層] ➔ [殘牌蒙地卡羅層 (100K)] ➔ [最終歸一化]
-    """
     if history_list is None: history_list = []
     if ai_targets is None: ai_targets = []
         
@@ -226,11 +202,10 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     NATURAL_P = 44.62
     NATURAL_T = 9.52
 
-    # --- 第 2 層：路型層 (Road Pattern Layer - 4大核心六特徵比對) ---
+    # --- 第 2 層：路型層 (Road Pattern Layer - 4大核心五特徵比對) ---
     four_roads = analyze_four_core_roads(history_list)
     raw_road_score = sum(r['net_score'] for r in four_roads.values())
 
-    # 智能破路 / 反打機制 (連爆 2 局自動觸發 Signal Inversion)
     consecutive_losses = 0
     for tgt, actual in zip(reversed(ai_targets), reversed(history_list)):
         if tgt and tgt.get('target') and actual != 'T':
@@ -240,7 +215,7 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     is_break_active = False
     if consecutive_losses >= 2:
         is_break_active = True
-        final_road_score = -raw_road_score * 1.3 # 強制反轉四大路單權重 1.3 倍
+        final_road_score = -raw_road_score * 1.3
     else:
         final_road_score = raw_road_score
 
@@ -250,13 +225,12 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
 
     # --- 第 3 層：隱性層 (Implicit Tie Layer) ---
     actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
-    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15 # 和局偏離修正
+    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15
     
     l3_b = l2_b - tie_implicit_bias
     l3_p = l2_p + tie_implicit_bias
 
-    # --- 第 4 層：殘牌層 (Remaining Shoe Monte Carlo Layer - 100,000 局) ---
-    # 結合【底座+路型+隱性】前三層整合資料 + 全局已開出殘牌數據進行 100,000 局模擬
+    # --- 第 4 層：殘牌層 (Monte Carlo Layer - 100K) ---
     raw_rc = (p_count - b_count) * 0.5
     avg_tc = raw_rc / remaining_decks
 
@@ -279,7 +253,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     mc_b_ratio = (results['B'] / total_sims) * 100
     mc_p_ratio = (results['P'] / total_sims) * 100
 
-    # 殘牌模擬結果與前三層整合數據之融合
     post_mc_b = l3_b * 0.5 + mc_b_ratio * 0.5
     post_mc_p = l3_p * 0.5 + mc_p_ratio * 0.5
 
