@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 載入核心大腦
+# 載入五層整合大腦
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
@@ -89,9 +89,9 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
             st.session_state.ai_targets.extend([None] * len(cleaned))
             st.rerun()
 
-# ================= 4. 最終預測建議與 4 大核心分析 =================
+# ================= 4. 五層流水線最終預測與核心診斷 =================
 st.markdown("---")
-st.markdown("### 🧠 最終權重預測建議 (四核分拆 + 天生勝率 + 智能破路)")
+st.markdown("### 🧠 最終權重預測建議 (五層流水線 Pipeline)")
 
 total_hands = len(st.session_state.history)
 b_count = st.session_state.history.count('B')
@@ -104,7 +104,7 @@ is_break_active = False
 consec_losses = 0
 
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    with st.spinner("⚡ 運算中：整合 10萬次蒙地卡羅、4大路單分拆、天生勝率底座與和局隱性影響..."):
+    with st.spinner("⚡ 執行中：[底座]➔[4核路型6特徵]➔[隱性]➔[10萬局殘牌MC]➔[歸一化]..."):
         avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses = run_monte_carlo_with_kelly(
             b_count, p_count, t_count, 
             bankroll=st.session_state.bankroll, 
@@ -136,11 +136,11 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     <div class="weight-box">
         <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}</h2>
         <p style="font-size: 18px; margin-top:8px;">
-            <b>莊家最終權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
-            <b>閒家最終權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
+            <b>莊家歸一化權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
+            <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [底座基準] 天生勝率 (莊 45.86% | 閒 44.62% | 和 9.52%) ｜ 當前和局率: {actual_t_ratio}% (含和局隱性修正)
+            [流水線順序] 底座(莊45.86%|閒44.62%) ➔ 四核6特徵路型 ➔ 隱性修正(和率{actual_t_ratio}%) ➔ 100K殘牌MC ➔ 歸一化
         </small>
     </div>
     """, unsafe_allow_html=True)
@@ -155,21 +155,20 @@ sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 
 sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
-# 顯示 4 大核心路單獨立診斷儀表板
+# 顯示 4 大核心路單（各別具備六大特徵強弱比對）獨立診斷儀表板
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立分析診斷")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (各別跑滿六大特徵並取強者)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
         item = four_roads_data[k]
-        score_str = f"+{item['score']}" if item['score'] > 0 else f"{item['score']}"
-        color = "green" if item['score'] != 0 else "gray"
+        color = "red" if item['dominant'] == 'B' else ("blue" if item['dominant'] == 'P' else "gray")
         with r_cols[i]:
             st.markdown(f"""
             <div class="pattern-card">
                 <b>{item['name']}</b><br>
-                <span style="color:{color}; font-size:14px;">權重偏向: {score_str}</span><br>
-                <small style="color:#aaa;">{item['status']}</small>
+                <span style="color:{color}; font-size:13px; font-weight:bold;">{item['status']}</span><br>
+                <small style="color:#aaa;">六特徵明細: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
             </div>
             """, unsafe_allow_html=True)
 
@@ -235,7 +234,7 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
                 if road_type == "bead":
                     bg = "#e81123" if val == 'B' else "#0078d7" if val == 'P' else "#2ca02c"
                     txt = "莊" if val == 'B' else "閒" if val == 'P' else "和"
-                    content = f'<div style="width:20px;height:20px;background:{bg};color:white;border-radius:50%;font-size:12px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{txt}</div>'
+                    content = f'<div style="width:20px;height:20px;background:{bg};color:white;border-radius:50%;font-size:10px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{txt}</div>'
                 elif road_type == "big":
                     content = f'<div style="position:relative;width:16px;height:16px;border:2px solid {color};border-radius:50%;margin:auto;">'
                     if ties > 0: content += f'<div style="position:absolute;width:20px;height:2px;background:#2ca02c;transform:rotate(-45deg);top:7px;left:-4px;"></div>'
