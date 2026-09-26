@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 嘗試載入計算引擎 (請確保你的 engine.py 在同一個資料夾)
+# 嘗試載入計算引擎 (若有 engine.py 則啟動，無則純顯示路單)
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
@@ -10,185 +10,233 @@ except ImportError:
 # ================= 1. 系統全域設定 =================
 st.set_page_config(page_title="Quantum Baccarat OS", layout="wide", initial_sidebar_state="collapsed")
 
-# 自訂原生 CSS 樣式 (隱藏預設留白，美化按鈕)
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 95% !important; }
-        .stButton>button { height: 50px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-        .b-btn { background-color: #ff4b4b !important; color: white !important; }
-        .p-btn { background-color: #1f77b4 !important; color: white !important; }
-        .t-btn { background-color: #2ca02c !important; color: white !important; }
-        .road-container { background: white; padding: 10px; border-radius: 8px; overflow-x: auto; margin-bottom: 20px;}
-        .ask-road-box { background: #f0f2f6; border-radius: 8px; padding: 15px; text-align: center; }
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
+        .stButton>button { height: 45px; font-size: 18px; font-weight: bold; border-radius: 8px; }
+        .road-container { background: white; padding: 5px; border-radius: 8px; overflow-x: auto; margin-bottom: 15px; border: 1px solid #ddd;}
+        .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 10px; text-align: center; color: white; border: 1px solid #444;}
+        .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-# 初始化資料庫
 if 'history' not in st.session_state: st.session_state.history = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 2. 頂部控制台 =================
-c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-st.session_state.bankroll = c1.number_input("💰 總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
-sim_runs = c2.selectbox("⚡ AI 深度", [5000, 10000, 20000], index=1)
-if c3.button("🗑️ 清空歷史 (新靴)", use_container_width=True): 
-    st.session_state.history = []
-    st.rerun()
-if c4.button("↩️ 撤銷上一手", use_container_width=True): 
-    if st.session_state.history: st.session_state.history.pop()
+# ================= 2. 下三路核心演算法 =================
 
-# 實時開牌輸入區
-st.markdown("### 🎛️ 開牌輸入")
-btn_col1, btn_col2, btn_col3 = st.columns(3)
-if btn_col1.button("🔴 開莊 (Banker)", use_container_width=True): st.session_state.history.append('B')
-if btn_col2.button("🔵 開閒 (Player)", use_container_width=True): st.session_state.history.append('P')
-if btn_col3.button("🟢 開和 (Tie)", use_container_width=True): st.session_state.history.append('T')
-
-st.markdown("---")
-
-# ================= 3. AI 數學分析核心 =================
-st.markdown("### 🧠 AI 核心分析與決策")
-
-total_hands = len(st.session_state.history)
-b_count = st.session_state.history.count('B')
-p_count = st.session_state.history.count('P')
-t_count = st.session_state.history.count('T')
-
-ai_recommend = "等待數據..."
-ai_bet_amount = 0
-
-if total_hands > 0 and run_monte_carlo_with_kelly:
-    with st.spinner("AI 高速運算中..."):
-        avg_tc, b_prob, p_prob, t_prob, recommend, k_percent, s_bet = run_monte_carlo_with_kelly(
-            b_count, p_count, t_count, bankroll=st.session_state.bankroll, sim_count=sim_runs
-        )
-        ai_recommend = recommend
-        ai_bet_amount = s_bet
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("精算真數 (TC)", f"{avg_tc:.2f}")
-        m2.metric("莊家修正勝率", f"{b_prob:.2f}%")
-        m3.metric("閒家修正勝率", f"{p_prob:.2f}%")
-        m4.metric("和局預估機率", f"{t_prob:.2f}%")
-
-        if s_bet > 0:
-            st.success(f"🔥 **AI 決策信號：{recommend}** ｜ 💵 建議注碼：**${s_bet}**")
+def build_logical_columns(history):
+    """將歷史轉換為純莊閒的邏輯列（忽略和局），用於下三路比對"""
+    cols = []
+    current_col = []
+    last_res = None
+    for res in history:
+        if res == 'T': continue
+        if res != last_res:
+            if current_col: cols.append(current_col)
+            current_col = [res]
+            last_res = res
         else:
-            st.warning(f"🛡️ **防禦信號：{recommend}** (負期望值，強制停注觀望)")
+            current_col.append(res)
+    if current_col: cols.append(current_col)
+    return cols
 
-# ================= 4. 原生百家樂路單引擎 (Python -> HTML) =================
+def get_derived_road(cols, k):
+    """
+    計算下三路 (k=1: 大眼仔, k=2: 小路, k=3: 曱甴路)
+    回傳 'R' (紅) 或 'B' (藍) 的一維陣列
+    """
+    derived = []
+    for c in range(1, len(cols)):
+        for r in range(len(cols[c])):
+            if c < k: continue # 該路還沒開始
+            
+            if r == 0:
+                if c < k + 1: continue
+                # 換列時 (第一格)：比對前一列與參考列的長度
+                len_prev = len(cols[c-1])
+                len_ref = len(cols[c-1-k])
+                derived.append('R' if len_prev == len_ref else 'B')
+            else:
+                # 直落時 (第二格起)：比對參考列是否有該格
+                len_ref = len(cols[c-k])
+                if len_ref >= r + 1: # 參考列有此格 (拍腳)
+                    derived.append('R')
+                elif len_ref == r: # 參考列剛好缺此格
+                    derived.append('B')
+                else: # 參考列缺很多格 (長莊/長閒)
+                    derived.append('R')
+    return derived
 
-def generate_big_road_matrix(history, rows=6, cols=36):
-    """百家樂大路核心演算法 (支援長龍向右拐彎與和局記錄)"""
+def layout_road_matrix(data_list, rows=6):
+    """通用的路單排版引擎 (支援長龍向右拐彎)"""
     grid = {}
     curr_col, curr_row = 0, 0
     start_col = 0
-    last_real = None
+    last_val = None
     
-    for item in history:
-        if item == 'T':
-            if last_real is not None:
-                if 'ties' not in grid[(curr_col, curr_row)]:
-                    grid[(curr_col, curr_row)]['ties'] = 1
-                else:
-                    grid[(curr_col, curr_row)]['ties'] += 1
-            continue
-            
-        if last_real is None:
-            last_real = item
-            grid[(curr_col, curr_row)] = {'val': item, 'ties': 0}
-        elif item == last_real:
+    for item in data_list:
+        if last_val is None:
+            last_val = item
+            grid[(curr_col, curr_row)] = item
+        elif item == last_val:
             curr_row += 1
-            # 處理長龍向下碰底或撞到其他棋子的「向右拐彎」機制
+            # 碰底或撞牆，向右拐彎
             if curr_row >= rows or (curr_col, curr_row) in grid:
                 curr_row -= 1
                 curr_col += 1
-            grid[(curr_col, curr_row)] = {'val': item, 'ties': 0}
+            grid[(curr_col, curr_row)] = item
         else:
-            last_real = item
+            last_val = item
             start_col += 1
             curr_col = start_col
-            # 尋找第 0 行第一個空的欄位開新路
+            # 尋找第一列空位開新局
             while (curr_col, 0) in grid:
                 curr_col += 1
             start_col = curr_col
             curr_row = 0
-            grid[(curr_col, curr_row)] = {'val': item, 'ties': 0}
-            
+            grid[(curr_col, curr_row)] = item
     return grid
 
-def render_html_grid(grid, rows=6, cols=36, cell_size=28, is_bead=False):
-    """將 Python 矩陣渲染成精緻的 HTML 表格"""
-    html = f'<table style="border-collapse: collapse; background: #fff; table-layout: fixed; border: 2px solid #666;">'
+# ================= 3. HTML 渲染引擎 =================
+
+def render_grid_html(grid, rows=6, cols=20, cell_size=20, road_type="big"):
+    html = f'<table style="border-collapse: collapse; background: #fff; table-layout: fixed; margin: auto;">'
     for r in range(rows):
         html += '<tr>'
         for c in range(cols):
             cell = grid.get((c, r), None)
             content = ""
             if cell:
+                # 解析資料 (大路可能包含和局字典，下三路只有純字串)
                 val = cell['val'] if isinstance(cell, dict) else cell
                 ties = cell.get('ties', 0) if isinstance(cell, dict) else 0
                 
-                # 樣式定義
-                if is_bead:
-                    bg = "#ff4b4b" if val == 'B' else "#1f77b4" if val == 'P' else "#2ca02c"
+                # 顏色定義
+                color = "#e81123" if val in ['B', 'R'] else "#0078d7"
+                
+                # 依照路單類型畫不同的符號
+                if road_type == "bead":
+                    bg = "#e81123" if val == 'B' else "#0078d7" if val == 'P' else "#2ca02c"
                     txt = "莊" if val == 'B' else "閒" if val == 'P' else "和"
-                    content = f'<div style="width:22px;height:22px;background:{bg};color:white;border-radius:50%;font-size:12px;line-height:22px;text-align:center;margin:auto;">{txt}</div>'
-                else:
-                    color = "#ff4b4b" if val == 'B' else "#1f77b4"
-                    content = f'<div style="position:relative;width:20px;height:20px;border:3px solid {color};border-radius:50%;margin:auto;">'
+                    content = f'<div style="width:20px;height:20px;background:{bg};color:white;border-radius:50%;font-size:10px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{txt}</div>'
+                elif road_type == "big":
+                    content = f'<div style="position:relative;width:14px;height:14px;border:2px solid {color};border-radius:50%;margin:auto;">'
                     if ties > 0:
-                        content += f'<div style="position:absolute;width:24px;height:3px;background:#2ca02c;transform:rotate(-45deg);top:8px;left:-4px;"></div>'
+                        content += f'<div style="position:absolute;width:18px;height:2px;background:#2ca02c;transform:rotate(-45deg);top:6px;left:-4px;"></div>'
                     content += '</div>'
+                elif road_type == "big_eye":
+                    # 大眼仔：小空心圓
+                    content = f'<div style="width:10px;height:10px;border:2px solid {color};border-radius:50%;margin:auto;"></div>'
+                elif road_type == "small":
+                    # 小路：實心圓
+                    content = f'<div style="width:10px;height:10px;background:{color};border-radius:50%;margin:auto;"></div>'
+                elif road_type == "roach":
+                    # 曱甴路：斜線
+                    content = f'<div style="width:12px;height:2px;background:{color};transform:rotate(-45deg);margin:auto;margin-top:8px;"></div>'
                     
-            html += f'<td style="border: 1px solid #ddd; width: {cell_size}px; height: {cell_size}px; text-align: center; vertical-align: middle;">{content}</td>'
+            html += f'<td style="border: 1px solid #eee; width: {cell_size}px; height: {cell_size}px; text-align: center; vertical-align: middle;">{content}</td>'
         html += '</tr>'
     html += '</table>'
     return html
 
-st.markdown("---")
-st.markdown("### 📊 標準歷史路單")
+# ================= 4. UI 介面配置 =================
+c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+if c1.button("🔴 開莊 (B)", use_container_width=True): st.session_state.history.append('B')
+if c2.button("🔵 開閒 (P)", use_container_width=True): st.session_state.history.append('P')
+if c3.button("🟢 開和 (T)", use_container_width=True): st.session_state.history.append('T')
+if c4.button("↩️ 撤銷上一手", use_container_width=True): 
+    if st.session_state.history: st.session_state.history.pop()
 
-# 準備大路數據
-big_road_grid = generate_big_road_matrix(st.session_state.history, cols=36)
-big_road_html = render_html_grid(big_road_grid, rows=6, cols=36, cell_size=28, is_bead=False)
+# --- 處理大路數據 (獨立處理和局) ---
+big_road_list = []
+for item in st.session_state.history:
+    if item == 'T' and big_road_list:
+        big_road_list[-1]['ties'] += 1
+    elif item != 'T':
+        big_road_list.append({'val': item, 'ties': 0})
+        
+# --- 產生路單矩陣 ---
+big_road_grid = layout_road_matrix(big_road_list)
+logical_cols = build_logical_columns(st.session_state.history)
 
-# 準備珠盤路數據 (簡單的由上而下，由左至右)
-bead_grid = {}
-for i, res in enumerate(st.session_state.history):
-    bead_grid[(i // 6, i % 6)] = res
-bead_html = render_html_grid(bead_grid, rows=6, cols=14, cell_size=28, is_bead=True)
+big_eye_list = get_derived_road(logical_cols, 1)
+small_road_list = get_derived_road(logical_cols, 2)
+roach_road_list = get_derived_road(logical_cols, 3)
 
-col_road1, col_road2 = st.columns([1.5, 3])
-with col_road1:
+# ================= 5. 渲染五大路單 =================
+st.markdown("### 📊 專業娛樂城路紙 (五路全開)")
+
+col_top1, col_top2 = st.columns([2, 5])
+with col_top1:
     st.caption("珠盤路 (Bead Plate)")
-    st.markdown(f'<div class="road-container">{bead_html}</div>', unsafe_allow_html=True)
-with col_road2:
-    st.caption("大路 (Big Road) - 自動長龍拐彎")
-    st.markdown(f'<div class="road-container">{big_road_html}</div>', unsafe_allow_html=True)
+    bead_grid = {(i // 6, i % 6): res for i, res in enumerate(st.session_state.history)}
+    st.markdown(f'<div class="road-container">{render_grid_html(bead_grid, cols=12, cell_size=26, road_type="bead")}</div>', unsafe_allow_html=True)
 
-# ================= 5. 莊閒問路 (模擬預測) =================
-st.markdown("### 🔮 莊閒問路 (AI 下局走勢預測)")
-ask_b_col, ask_p_col = st.columns(2)
+with col_top2:
+    st.caption("大路 (Big Road)")
+    st.markdown(f'<div class="road-container">{render_grid_html(big_road_grid, cols=42, cell_size=26, road_type="big")}</div>', unsafe_allow_html=True)
 
-# 問路邏輯：模擬下一局如果是莊或閒，AI的推薦與狀態
-with ask_b_col:
-    st.markdown("""
+st.caption("下三路 (Lower Three Roads: 大眼仔路 / 小路 / 曱甴路)")
+col_bot1, col_bot2, col_bot3 = st.columns(3)
+
+with col_bot1:
+    grid = layout_road_matrix(big_eye_list)
+    st.markdown(f'<div class="road-container">{render_grid_html(grid, cols=28, cell_size=18, road_type="big_eye")}</div>', unsafe_allow_html=True)
+
+with col_bot2:
+    grid = layout_road_matrix(small_road_list)
+    st.markdown(f'<div class="road-container">{render_grid_html(grid, cols=28, cell_size=18, road_type="small")}</div>', unsafe_allow_html=True)
+
+with col_bot3:
+    grid = layout_road_matrix(roach_road_list)
+    st.markdown(f'<div class="road-container">{render_grid_html(grid, cols=28, cell_size=18, road_type="roach")}</div>', unsafe_allow_html=True)
+
+
+# ================= 6. 莊閒精確問路 (Ask Road) =================
+def get_ask_road_symbols(history, test_val):
+    """預測下一手開莊/閒時，下三路會出的顏色"""
+    temp_hist = history + [test_val]
+    temp_cols = build_logical_columns(temp_hist)
+    e = get_derived_road(temp_cols, 1)
+    s = get_derived_road(temp_cols, 2)
+    r = get_derived_road(temp_cols, 3)
+    return (
+        e[-1] if e else None, 
+        s[-1] if s else None, 
+        r[-1] if r else None
+    )
+
+ask_b = get_ask_road_symbols(st.session_state.history, 'B')
+ask_p = get_ask_road_symbols(st.session_state.history, 'P')
+
+def draw_ask_icon(val, r_type):
+    if not val: return "<div style='width:20px; height:20px;'></div>"
+    color = "#e81123" if val == 'R' else "#0078d7"
+    if r_type == 'eye': return f"<div style='width:16px;height:16px;border:3px solid {color};border-radius:50%;'></div>"
+    if r_type == 'small': return f"<div style='width:16px;height:16px;background:{color};border-radius:50%;'></div>"
+    if r_type == 'roach': return f"<div style='width:16px;height:4px;background:{color};transform:rotate(-45deg);margin-top:6px;'></div>"
+
+st.markdown("### 🔮 莊閒問路")
+col_ask_b, col_ask_p = st.columns(2)
+
+with col_ask_b:
+    st.markdown(f"""
     <div class="ask-road-box">
-        <h4 style="color:#ff4b4b; margin-top:0;">🔴 若下局開【莊】</h4>
-        <p style="font-size:14px; color:#666;">大路將呈現紅色圈連線，真數 (TC) 偏向下降。</p>
+        <h4 style="color:#e81123; margin:0;">🔴 莊問路 (Banker)</h4>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_b[0], 'eye')} {draw_ask_icon(ask_b[1], 'small')} {draw_ask_icon(ask_b[2], 'roach')}
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    if "莊" in ai_recommend:
-        st.success("✨ 符合當前 AI 資金進場模型")
 
-with ask_p_col:
-    st.markdown("""
+with col_ask_p:
+    st.markdown(f"""
     <div class="ask-road-box">
-        <h4 style="color:#1f77b4; margin-top:0;">🔵 若下局開【閒】</h4>
-        <p style="font-size:14px; color:#666;">大路將呈現藍色圈連線，真數 (TC) 偏向攀升。</p>
+        <h4 style="color:#0078d7; margin:0;">🔵 閒問路 (Player)</h4>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_p[0], 'eye')} {draw_ask_icon(ask_p[1], 'small')} {draw_ask_icon(ask_p[2], 'roach')}
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    if "閒" in ai_recommend:
-        st.success("✨ 符合當前 AI 資金進場模型")
