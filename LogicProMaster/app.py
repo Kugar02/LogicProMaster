@@ -134,7 +134,7 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"${pnl:.2f}")
 st.markdown("---")
 
 # ================= 3. AI 預測建議與雙向矩陣面板 =================
-st.markdown("### 🧠 最終權重預測建議 (AI 自主學習與保護鎖)")
+st.markdown("### 🧠 最終權重預測建議 (雙重 AI 自主學習引擎)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -156,7 +156,7 @@ if total_hands > 0:
         st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%)，已精準反轉方向執行反打！")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (獨立特徵 + 獨立馬爾可夫鏈)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (動態 AI 配比 + 獨立馬爾可夫)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
