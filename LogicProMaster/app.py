@@ -177,39 +177,32 @@ st.markdown("---")
 # ================= 4. 歷史數據控制介面 =================
 st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
 
-st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
-btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
+# --- 路單與問路算力工具函數 (定義在前，避免 NameError) ---
+def build_logical_columns(history):
+    cols, current_col, last_res = [], [], None
+    for res in history:
+        if res == 'T': continue
+        if res != last_res:
+            if current_col: cols.append(current_col)
+            current_col = [res]; last_res = res
+        else: current_col.append(res)
+    if current_col: cols.append(current_col)
+    return cols
 
-def record_hand(result):
-    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
-    st.session_state.history.append(result)
-    st.rerun()
-
-if btn_col1.button("🔴 開莊 (B)", use_container_width=True): record_hand('B')
-if btn_col2.button("🔵 開閒 (P)", use_container_width=True): record_hand('P')
-if btn_col3.button("🟢 開和 (T)", use_container_width=True): record_hand('T')
-if btn_col4.button("↩️ 撤銷上一手", use_container_width=True): 
-    if st.session_state.history: 
-        st.session_state.history.pop()
-        st.session_state.ai_targets.pop()
-    st.rerun()
-
-with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
-    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
-    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
-        cleaned = []
-        for char in batch_input:
-            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
-            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
-            elif char in ['T', 't', '和']: cleaned.append('T')
-        if cleaned:
-            st.session_state.history.extend(cleaned)
-            st.session_state.ai_targets.extend([None] * len(cleaned))
-            st.rerun()
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
+def get_derived_road(cols, k):
+    derived = []
+    for c in range(1, len(cols)):
+        for r in range(len(cols[c])):
+            if c < k: continue
+            if r == 0:
+                if c < k + 1: continue
+                derived.append('Red' if len(cols[c-1]) == len(cols[c-1-k]) else 'Blue')
+            else:
+                len_ref = len(cols[c-k])
+                if len_ref >= r + 1: derived.append('Red')
+                elif len_ref == r: derived.append('Blue')
+                else: derived.append('Red')
+    return derived
 
 def layout_road_matrix(data_list, rows=6):
     grid, curr_col, curr_row, start_col, last_val = {}, 0, 0, 0, None
@@ -259,6 +252,57 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
     html += '</div>'
     return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
 
+def get_ask_road_symbols(history, test_val):
+    temp_hist = history + [test_val]
+    temp_cols = build_logical_columns(temp_hist)
+    e = get_derived_road(temp_cols, 1)
+    s = get_derived_road(temp_cols, 2)
+    r = get_derived_road(temp_cols, 3)
+    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
+
+def draw_ask_icon(val, r_type):
+    if not val: return "<div style='width:18px; height:18px;'></div>"
+    color = "#e81123" if val == 'Red' else "#0078d7"
+    if r_type == 'eye': return f"<div style='width:14px;height:14px;border:2px solid {color};border-radius:50%;'></div>"
+    if r_type == 'small': return f"<div style='width:14px;height:14px;background:{color};border-radius:50%;'></div>"
+    if r_type == 'roach': return f"<div style='width:14px;height:3px;background:{color};transform:rotate(-45deg);margin-top:5px;'></div>"
+
+# --- 4A. 開牌紀錄與快捷輸入 ---
+st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
+btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
+
+def record_hand(result):
+    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
+    st.session_state.history.append(result)
+    st.rerun()
+
+if btn_col1.button("🔴 開莊 (B)", use_container_width=True): record_hand('B')
+if btn_col2.button("🔵 開閒 (P)", use_container_width=True): record_hand('P')
+if btn_col3.button("🟢 開和 (T)", use_container_width=True): record_hand('T')
+if btn_col4.button("↩️ 撤銷上一手", use_container_width=True): 
+    if st.session_state.history: 
+        st.session_state.history.pop()
+        st.session_state.ai_targets.pop()
+    st.rerun()
+
+with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
+    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
+    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
+        cleaned = []
+        for char in batch_input:
+            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
+            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
+            elif char in ['T', 't', '和']: cleaned.append('T')
+        if cleaned:
+            st.session_state.history.extend(cleaned)
+            st.session_state.ai_targets.extend([None] * len(cleaned))
+            st.rerun()
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# --- 4B. 專業娛樂城路紙 (五路全開) ---
+st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
+
 big_road_list = []
 for item in st.session_state.history:
     if item == 'T' and big_road_list: big_road_list[-1]['ties'] += 1
@@ -281,24 +325,9 @@ with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(l
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
 
-# 底部統計數據橫條 + 莊閒問路卡片
-def get_ask_road_symbols(history, test_val):
-    temp_hist = history + [test_val]
-    temp_cols = build_logical_columns(temp_hist)
-    e = get_derived_road(temp_cols, 1)
-    s = get_derived_road(temp_cols, 2)
-    r = get_derived_road(temp_cols, 3)
-    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
-
+# --- 4C. 底部統計數據橫條 + 莊閒問路卡片 ---
 ask_b = get_ask_road_symbols(st.session_state.history, 'B')
 ask_p = get_ask_road_symbols(st.session_state.history, 'P')
-
-def draw_ask_icon(val, r_type):
-    if not val: return "<div style='width:18px; height:18px;'></div>"
-    color = "#e81123" if val == 'Red' else "#0078d7"
-    if r_type == 'eye': return f"<div style='width:14px;height:14px;border:2px solid {color};border-radius:50%;'></div>"
-    if r_type == 'small': return f"<div style='width:14px;height:14px;background:{color};border-radius:50%;'></div>"
-    if r_type == 'roach': return f"<div style='width:14px;height:3px;background:{color};transform:rotate(-45deg);margin-top:5px;'></div>"
 
 st.markdown("<br>", unsafe_allow_html=True)
 
