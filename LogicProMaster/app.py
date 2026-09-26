@@ -55,7 +55,7 @@ for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
             fibo_idx += 1
             martingale_mult *= 2
 
-# ================= 3. 實時開牌輸入區 =================
+# ================= 3. 實時開牌與批量輸入區 =================
 st.markdown("### 🎛️ 開牌輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
@@ -72,6 +72,22 @@ if btn_col4.button("↩️ 撤銷上一手", use_container_width=True):
         st.session_state.history.pop()
         st.session_state.ai_targets.pop()
     st.rerun()
+
+# ⭐️ 新增：批量輸入歷史路單
+with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
+    batch_input = st.text_input("請輸入歷史賽果 (支援 B/P/T 或 莊/閒/和，無需空格)", placeholder="例如: 莊莊閒和莊 或 BBPTP")
+    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
+        cleaned = []
+        for char in batch_input:
+            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
+            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
+            elif char in ['T', 't', '和']: cleaned.append('T')
+        
+        if cleaned:
+            # 將解析結果加入歷史，並同步補齊 AI 的空白佔位符，以免打亂回測統計
+            st.session_state.history.extend(cleaned)
+            st.session_state.ai_targets.extend([None] * len(cleaned))
+            st.rerun()
 
 # ================= 4. AI 決策面板 =================
 st.markdown("---")
@@ -128,7 +144,6 @@ def build_logical_columns(history):
     return cols
 
 def get_derived_road(cols, k):
-    # 徹底修復：輸出明確的 'Red' 和 'Blue'，避免與莊家 'B' 發生字串衝突
     derived = []
     for c in range(1, len(cols)):
         for r in range(len(cols[c])):
