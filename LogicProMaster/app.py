@@ -9,92 +9,113 @@ try:
 except ImportError:
     MTLiveScraper = None
 
-st.set_page_config(page_title="LogicProAi 終極融合版 (MT-Live)", layout="wide", initial_sidebar_state="expanded")
+# 1. 頁面設定：強制滿版寬度
+st.set_page_config(page_title="LogicProMaster 終極版", layout="wide")
+
+# 2. 隱藏 Streamlit 預設的 Header, Footer 與多餘 Padding
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 100% !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 if 'history' not in st.session_state: st.session_state.history = []
 if 'scraper_instance' not in st.session_state: st.session_state.scraper_instance = None
 if 'auto_sync' not in st.session_state: st.session_state.auto_sync = False
 
-# ================= 側邊欄設定 =================
-st.sidebar.markdown("### 🔌 自動盯盤抓取設定")
-casino_url = st.sidebar.text_input("娛樂城登入網址", value="https://example-casino.com")
+# ================= 頂部控制列 (取代側邊欄) =================
 
-col_auto1, col_auto2 = st.sidebar.columns(2)
-with col_auto1:
-    if st.sidebar.button("🔗 啟動瀏覽器", use_container_width=True):
+# 將爬蟲與系統設定收納進隱藏面板，保持主畫面乾淨
+with st.expander("⚙️ MT-Live 自動抓取系統與參數設定", expanded=False):
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    casino_url = c1.text_input("娛樂城網址", value="https://dg38.net/action/Opengame/freegame.aspx")
+    
+    if c2.button("🔗 啟動瀏覽器", use_container_width=True):
         if MTLiveScraper:
             st.session_state.scraper_instance = MTLiveScraper(casino_url)
             st.session_state.scraper_instance.start_monitoring()
-            st.sidebar.success("✅ 瀏覽器就緒")
+            st.success("✅ 就緒")
         else:
-            st.sidebar.error("找不到 scraper.py")
-with col_auto2:
-    st.session_state.auto_sync = st.sidebar.checkbox("🔄 開啟同步", value=st.session_state.auto_sync)
+            st.error("找不到 scraper.py")
+    
+    st.session_state.auto_sync = c3.checkbox("🔄 開啟同步", value=st.session_state.auto_sync)
+    if c4.button("🗑️ 重置牌靴", use_container_width=True):
+        st.session_state.history = []
+        st.rerun()
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🎛️ 手動輸入區 (Python 端)")
-c_b, c_p, c_t = st.sidebar.columns(3)
-if c_b.button("🔴 莊", use_container_width=True): st.session_state.history.append('B')
-if c_p.button("🔵 閒", use_container_width=True): st.session_state.history.append('P')
-if c_t.button("🟢 和", use_container_width=True): st.session_state.history.append('T')
+# 實時開牌輸入區 (橫向置中精簡版)
+st.markdown("### 🎛️ 手動開牌紀錄")
+col_b, col_p, col_t, col_undo, _ = st.columns([1, 1, 1, 1, 4])
+if col_b.button("🔴 開莊 (B)", use_container_width=True): st.session_state.history.append('B')
+if col_p.button("🔵 開閒 (P)", use_container_width=True): st.session_state.history.append('P')
+if col_t.button("🟢 開和 (T)", use_container_width=True): st.session_state.history.append('T')
+if col_undo.button("↩️ 退回一局", use_container_width=True) and st.session_state.history: 
+    st.session_state.history.pop()
 
-c_undo, c_clear = st.sidebar.columns(2)
-if c_undo.button("退回一局", use_container_width=True) and st.session_state.history: st.session_state.history.pop()
-if c_clear.button("重置牌靴", use_container_width=True): st.session_state.history = []
-
+# 自動同步爬蟲邏輯
 if st.session_state.auto_sync and st.session_state.scraper_instance:
     new_data = st.session_state.scraper_instance.get_live_scores()
     if new_data: pass
     time.sleep(2)
     st.rerun()
 
-# ================= 核心融合引擎 =================
-st.markdown("### 🃏 MT Live 百家樂：多維路單與旗艦預測系統 (AI 防禦機制已啟動)")
+st.markdown("---")
 
+# ================= 核心融合引擎 (載入 LogicProMaster 前端) =================
+
+# 動態判斷檔案路徑 (支援直接放根目錄，或放在 LogicProMaster 資料夾內)
 html_path = "index.html"
+css_path = "style.css"
+js_path = "app.js"
+
+if not os.path.exists(html_path) and os.path.exists(os.path.join("LogicProMaster", "index.html")):
+    html_path = os.path.join("LogicProMaster", "index.html")
+    css_path = os.path.join("LogicProMaster", "style.css")
+    js_path = os.path.join("LogicProMaster", "app.js")
 
 if not os.path.exists(html_path):
-    st.error(f"❌ 找不到 `{html_path}` 檔案！")
+    st.error(f"❌ 找不到 `{html_path}`！請確認檔案位置。")
 else:
-    # 讀取主 HTML
     with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
 
-    # 嘗試讀取獨立的 CSS 與 JS 檔案 (如果有)
     css_content = ""
-    if os.path.exists("style.css"):
-        with open("style.css", "r", encoding="utf-8") as f:
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
             css_content = f.read()
             
     js_content = ""
-    if os.path.exists("app.js"):
-        with open("app.js", "r", encoding="utf-8") as f:
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as f:
             js_content = f.read()
 
-    # 將 Python 的路單數據轉換為 JSON
     python_history_json = json.dumps(st.session_state.history)
 
-    # 構建強勢注入腳本：將 CSS、JS 及數據直接嵌入 HTML
+    # 注入樣式與腳本
     injection_code = f"""
     <style>
-        /* 隱藏原本介面的輸入按鈕，避免與左側 Python 側邊欄衝突 */
+        /* 隱藏 HTML 內建的按鈕列，避免與 Streamlit 的 Python 按鈕重複 */
         .direct-input-container, .btn-group, .batch-input-group {{ display: none !important; }}
+        /* 去除 iframe 內的預設背景留白 */
+        body {{ background-color: transparent !important; margin: 0; padding: 0; }}
         {css_content}
     </style>
     <script>
-        // 1. 強制將 Python 傳來的數據設定為全域變數
         window.baccaratHistory = {python_history_json};
-        
-        // 2. 載入原本的 JS 邏輯
         {js_content}
-        
-        // 3. 確保畫面重繪 (如果你的 JS 中有特定的繪圖函數，可以在這裡呼叫，例如 renderRoads())
-        // renderRoads(); 
     </script>
     """
     
-    # 將注入腳本放入 HTML 的尾端，確保覆蓋原本設定
     html_content = html_content.replace("</body>", f"{injection_code}</body>")
 
-    # 渲染最終畫面
-    components.html(html_content, height=900, scrolling=True)
+    # 將高度拉大至 1200px 確保四大路與下三路完整呈現無需捲動
+    components.html(html_content, height=1200, scrolling=True)
