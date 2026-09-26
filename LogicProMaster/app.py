@@ -15,10 +15,20 @@ st.markdown("""
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
         .block-container { padding-top: 0.8rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
         .stButton>button { height: 48px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-        .ask-road-box { background: #16181f; border-radius: 8px; padding: 10px; text-align: center; color: white; border: 1px solid #2d313e;}
-        .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 6px; }
         .pattern-card { background: #1e2029; border: 1px solid #333644; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
         .weight-box { background: #0f1015; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
+        
+        /* 賭場風格統計橫條與問路按鈕樣式 */
+        .stat-badge { font-weight: bold; padding: 6px 16px; border-radius: 6px; font-size: 16px; color: white; display: inline-flex; align-items: center; gap: 8px; }
+        .stat-b { background-color: #e81123; }
+        .stat-p { background-color: #0078d7; }
+        .stat-t { background-color: #2ca02c; }
+        .stat-tot { background-color: #8d6e63; }
+        
+        .ask-btn-box { padding: 6px 16px; border-radius: 8px; font-weight: bold; color: white; display: flex; align-items: center; gap: 10px; }
+        .ask-btn-b { background-color: #e81123; }
+        .ask-btn-p { background-color: #0078d7; }
+        .ask-icon-group { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.25); padding: 4px 10px; border-radius: 6px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -159,9 +169,10 @@ if four_roads_data:
 
 st.markdown("---")
 
-# ================= 4. 統合歷史數據介面 =================
+# ================= 4. 歷史數據控制介面 (路紙/問路/開牌輸入) =================
 st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
 
+# 4A. 開牌紀錄輸入區
 st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
@@ -194,7 +205,8 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-st.markdown("##### 🔮 莊閒問路 (下局走向預測)")
+# 4B. 專業娛樂城路紙 (五路全開)
+st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
 
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
@@ -221,49 +233,6 @@ def get_derived_road(cols, k):
                 elif len_ref == r: derived.append('Blue')
                 else: derived.append('Red')
     return derived
-
-def get_ask_road_symbols(history, test_val):
-    temp_hist = history + [test_val]
-    temp_cols = build_logical_columns(temp_hist)
-    e = get_derived_road(temp_cols, 1)
-    s = get_derived_road(temp_cols, 2)
-    r = get_derived_road(temp_cols, 3)
-    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
-
-ask_b = get_ask_road_symbols(st.session_state.history, 'B')
-ask_p = get_ask_road_symbols(st.session_state.history, 'P')
-
-def draw_ask_icon(val, r_type):
-    if not val: return "<div style='width:20px; height:20px;'></div>"
-    color = "#e81123" if val == 'Red' else "#0078d7"
-    if r_type == 'eye': return f"<div style='width:16px;height:16px;border:3px solid {color};border-radius:50%;'></div>"
-    if r_type == 'small': return f"<div style='width:16px;height:16px;background:{color};border-radius:50%;'></div>"
-    if r_type == 'roach': return f"<div style='width:16px;height:4px;background:{color};transform:rotate(-45deg);margin-top:6px;'></div>"
-
-col_ask_b, col_ask_p = st.columns(2)
-with col_ask_b:
-    st.markdown(f"""
-    <div class="ask-road-box">
-        <h5 style="color:#e81123; margin:0; padding-bottom: 3px;">🔴 莊問路 (Banker)</h5>
-        <div class="ask-icons">
-            {draw_ask_icon(ask_b[0], 'eye')} {draw_ask_icon(ask_b[1], 'small')} {draw_ask_icon(ask_b[2], 'roach')}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_ask_p:
-    st.markdown(f"""
-    <div class="ask-road-box">
-        <h5 style="color:#0078d7; margin:0; padding-bottom: 3px;">🔵 閒問路 (Player)</h5>
-        <div class="ask-icons">
-            {draw_ask_icon(ask_p[0], 'eye')} {draw_ask_icon(ask_p[1], 'small')} {draw_ask_icon(ask_p[2], 'roach')}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
 
 def layout_road_matrix(data_list, rows=6):
     grid, curr_col, curr_row, start_col, last_val = {}, 0, 0, 0, None
@@ -334,3 +303,60 @@ col_bot1, col_bot2, col_bot3 = st.columns(3)
 with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 1)), cols=24, cell_size=18, road_type="big_eye"), unsafe_allow_html=True)
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
+
+# 4C. 底部統計數據橫條 + 莊閒問路卡片 (完全還原參考圖片佈局)
+def get_ask_road_symbols(history, test_val):
+    temp_hist = history + [test_val]
+    temp_cols = build_logical_columns(temp_hist)
+    e = get_derived_road(temp_cols, 1)
+    s = get_derived_road(temp_cols, 2)
+    r = get_derived_road(temp_cols, 3)
+    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
+
+ask_b = get_ask_road_symbols(st.session_state.history, 'B')
+ask_p = get_ask_road_symbols(st.session_state.history, 'P')
+
+def draw_ask_icon(val, r_type):
+    if not val: return "<div style='width:18px; height:18px;'></div>"
+    color = "#e81123" if val == 'Red' else "#0078d7"
+    if r_type == 'eye': return f"<div style='width:14px;height:14px;border:2px solid {color};border-radius:50%;'></div>"
+    if r_type == 'small': return f"<div style='width:14px;height:14px;background:{color};border-radius:50%;'></div>"
+    if r_type == 'roach': return f"<div style='width:14px;height:3px;background:{color};transform:rotate(-45deg);margin-top:5px;'></div>"
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+col_stat_left, col_ask_right = st.columns([1, 1])
+
+# 左側：無對子統計橫條
+with col_stat_left:
+    st.markdown(f"""
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
+        <div class="stat-badge stat-b">莊 <span style="font-size:22px;">{b_count}</span></div>
+        <div class="stat-badge stat-p">閒 <span style="font-size:22px;">{p_count}</span></div>
+        <div class="stat-badge stat-t">和 <span style="font-size:22px;">{t_count}</span></div>
+        <div class="stat-badge stat-tot">總 <span style="font-size:22px;">{total_hands}</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# 右側：莊閒問路按鈕
+with col_ask_right:
+    st.markdown(f"""
+    <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; margin-top: 5px;">
+        <div class="ask-btn-box ask-btn-b">
+            <span>莊問路</span>
+            <div class="ask-icon-group">
+                {draw_ask_icon(ask_b[0], 'eye')}
+                {draw_ask_icon(ask_b[1], 'small')}
+                {draw_ask_icon(ask_b[2], 'roach')}
+            </div>
+        </div>
+        <div class="ask-btn-box ask-btn-p">
+            <span>閒問路</span>
+            <div class="ask-icon-group">
+                {draw_ask_icon(ask_p[0], 'eye')}
+                {draw_ask_icon(ask_p[1], 'small')}
+                {draw_ask_icon(ask_p[2], 'roach')}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
