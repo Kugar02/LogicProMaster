@@ -93,7 +93,7 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     
     if target:
         if is_break_active:
-            current_bet = st.session_state.base_unit
+            current_bet = st.session_state.base_unit # 反打試探期鎖定 1 個注碼保本
         else:
             if st.session_state.strategy == "信號強弱 (1-2-3)":
                 diff = abs(final_b_pct - final_p_pct)
@@ -129,15 +129,15 @@ if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True):
 
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("💰 當前總資產", f"${st.session_state.bankroll + pnl:.2f}")
-m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0 (觀望)")
+m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0")
 m3.metric("📊 策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
 m4.metric("🎯 AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
-m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
+m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"${pnl:.2f}")
 
 st.markdown("---")
 
-# ================= 3. AI 預測建議與動態分析面板 =================
-st.markdown("### 🧠 最終權重預測建議 (各核心獨立馬爾可夫 + 主次權威階層)")
+# ================= 3. AI 預測建議與雙向矩陣面板 =================
+st.markdown("### 🧠 最終權重預測建議 (可信度驅動正打/反打)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -147,16 +147,16 @@ if total_hands > 0:
         <p style="font-size: 18px; margin-top:8px;">
             <b>莊家歸一化權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
             <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b> ｜ 
-            <b>AI 訊號自信度：<span style="color:#00ffcc;">{confidence_pct}%</span></b>
+            <b>訊號可信度指數：<span style="color:#00ffcc;">{confidence_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [{markov_status}] ｜ [主次權威比重] 大路40% | 下三路各20% ｜ 和率: {actual_t_ratio}%
+            [{markov_status}]
         </small>
     </div>
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.warning(f"🛡️ **動態高風控啟動**：連續 {consec_losses} 局正打未果，已提高進場門檻至 53.5% 並鎖定 1 個注碼單位防守。")
+        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%) 或近局未果，已精準反轉方向並鎖定 1 個注碼防守。")
 
 if four_roads_data:
     st.markdown("#### 🔍 4 大核心路單獨立診斷 (獨立特徵 + 獨立馬爾可夫鏈)")
