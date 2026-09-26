@@ -1,5 +1,5 @@
 # ==============================================================================
-# Quantum Baccarat Engine (無蒙地卡羅 - 純統計與馬爾可夫動態極致版)
+# Quantum Baccarat Engine (主次權威重構 + AI 自信度 + 解鎖盲目防禦版)
 # ==============================================================================
 
 def build_logical_columns(history):
@@ -30,30 +30,26 @@ def get_derived_road(cols, k):
 
 # ================= 1. 嚴格五大特徵獨立分析器 =================
 def analyze_five_features_for_sequence(seq):
-    """
-    對指定序列嚴格執行五大特徵檢測：
-    1.單跳 2.雙跳 3.長龍 4.房廳 5.逢跳連
-    """
     n = len(seq)
     b_score, p_score = 0, 0
     details = []
     if n < 3: return 0, 0, ["數據不足"]
 
-    # 1. 單跳 (B-P-B-P...)
+    # 1. 單跳
     if n >= 3 and seq[-1] != seq[-2] and seq[-2] != seq[-3]:
         target = 'B' if seq[-1] == 'P' else 'P'
         if target == 'B': b_score += 15
         else: p_score += 15
         details.append(f"單跳強向【{'莊' if target=='B' else '閒'}】")
 
-    # 2. 雙跳 (BB-PP-BB...)
+    # 2. 雙跳
     if n >= 4 and seq[-1] == seq[-2] and seq[-3] == seq[-4] and seq[-1] != seq[-3]:
         target = 'B' if seq[-1] == 'P' else 'P'
         if target == 'B': b_score += 20
         else: p_score += 20
         details.append(f"雙跳強向【{'莊' if target=='B' else '閒'}】")
 
-    # 3. 長龍 (BBB... 或 PPP...)
+    # 3. 長龍
     streak = 1
     for i in range(n-2, -1, -1):
         if seq[i] == seq[-1]: streak += 1
@@ -65,14 +61,14 @@ def analyze_five_features_for_sequence(seq):
         else: p_score += s
         details.append(f"長龍連{streak}【{'莊' if target=='B' else '閒'}】")
 
-    # 4. 房廳結構 (1房2廳 / 2房1廳)
+    # 4. 房廳結構
     if n >= 6 and seq[-3:] == seq[-6:-3] and len(set(seq[-3:])) == 2:
         predict_next = seq[-3]
         if predict_next == 'B': b_score += 16
         else: p_score += 16
         details.append(f"房廳週期【{'莊' if predict_next=='B' else '閒'}】")
 
-    # 5. 逢跳連 (跳後必連)
+    # 5. 逢跳連
     if n >= 5:
         jumps_then_streak = True
         for i in range(2, n-1):
@@ -88,7 +84,7 @@ def analyze_five_features_for_sequence(seq):
 
     return b_score, p_score, details
 
-# ================= 2. 二階馬爾可夫鏈轉移矩陣 (Markov Chain) =================
+# ================= 2. 二階馬爾可夫轉移矩陣 =================
 def analyze_markov_chain(history):
     clean_hist = [x for x in history if x in ['B', 'P']]
     n = len(clean_hist)
@@ -108,13 +104,13 @@ def analyze_markov_chain(history):
     
     b_prob = b_next_cnt / tot
     p_prob = p_next_cnt / tot
-    net_score = (p_prob - b_prob) * 25.0 # 正數偏閒，負數偏莊
+    net_score = (p_prob - b_prob) * 25.0
     
     pred = "莊" if b_prob > p_prob else ("閒" if p_prob > b_prob else "持平")
     status = f"馬爾可夫轉移: 前【{last_two[0]}{last_two[1]}】➔ 次開【{pred}】(莊{b_next_cnt}/閒{p_next_cnt})"
     return net_score, status
 
-# ================= 3. 單一核心內部決策與「三路共振」爆發加乘 =================
+# ================= 3. 單一核心內部決策 =================
 def evaluate_single_core_road(road_name, history, k=0):
     clean_hist = [x for x in history if x in ['B', 'P']]
     if k == 0:
@@ -138,47 +134,57 @@ def evaluate_single_core_road(road_name, history, k=0):
 
     return {'name': road_name, 'dominant': dominant, 'b_score': b_score, 'p_score': p_score, 'net_score': net_score, 'status': status, 'details': details}
 
+# ================= 4. 主次權威加權與自信度矩陣 =================
 def analyze_four_core_roads(history):
     roads = {
-        'big_road': evaluate_single_core_road('1. 大路核心', history, k=0),
-        'big_eye': evaluate_single_core_road('2. 大眼仔路', history, k=1),
-        'small_road': evaluate_single_core_road('3. 小路核心', history, k=2),
-        'roach_road': evaluate_single_core_road('4. 曱甴路核心', history, k=3)
+        'big_road': evaluate_single_core_road('1. 大路核心 (主軸40%)', history, k=0),
+        'big_eye': evaluate_single_core_road('2. 大眼仔路 (20%)', history, k=1),
+        'small_road': evaluate_single_core_road('3. 小路核心 (20%)', history, k=2),
+        'roach_road': evaluate_single_core_road('4. 曱甴路核心 (20%)', history, k=3)
     }
     
-    # 下三路「三路共振」爆發加乘
+    # 🎯 權威加權計算 (大路 40%, 下三路各 20%)
+    weighted_score = (
+        roads['big_road']['net_score'] * 0.40 +
+        roads['big_eye']['net_score'] * 0.20 +
+        roads['small_road']['net_score'] * 0.20 +
+        roads['roach_road']['net_score'] * 0.20
+    )
+    
+    # 三路共振爆發檢查
     derived_dominants = [roads['big_eye']['dominant'], roads['small_road']['dominant'], roads['roach_road']['dominant']]
     is_resonance = False
-    
     if derived_dominants.count('B') == 3 or derived_dominants.count('P') == 3:
         is_resonance = True
+        weighted_score *= 1.4 # 共振時加強整體權重
         for key in ['big_eye', 'small_road', 'roach_road']:
-            roads[key]['net_score'] *= 1.5
-            roads[key]['status'] += " (🔥三路共振)"
+            roads[key]['status'] += " (🔥共振)"
 
-    return roads, is_resonance
+    # 計算 AI 自信度指數 (Confidence Index)
+    valid_dominants = [r['dominant'] for r in roads.values() if r['dominant'] != 'Neutral']
+    if valid_dominants:
+        most_common = max(set(valid_dominants), key=valid_dominants.count)
+        confidence_pct = round((valid_dominants.count(most_common) / len(valid_dominants)) * 100)
+    else:
+        confidence_pct = 50
 
-# ================= 4. 純統計與馬爾可夫動態整合主引擎 =================
+    return roads, weighted_score, is_resonance, confidence_pct
+
+# ================= 5. 純統計與馬爾可夫主引擎 =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     if history_list is None: history_list = []
     if ai_targets is None: ai_targets = []
         
     total_hands = b_count + p_count + t_count
-    
-    # 第 1 層：天生勝率底座 (Natural Base)
     NATURAL_B, NATURAL_P, NATURAL_T = 45.86, 44.62, 9.52
 
-    # 第 2 層：四大核心路單 (含 5 大特徵與三路共振)
-    four_roads, is_resonance = analyze_four_core_roads(history_list)
-    raw_road_score = sum(r['net_score'] for r in four_roads.values())
+    # 四大核心（主次權威加權）
+    four_roads, weighted_road_score, is_resonance, confidence_pct = analyze_four_core_roads(history_list)
 
-    # 第 3 層：二階馬爾可夫轉移矩陣
+    # 二階馬爾可夫轉移矩陣
     markov_score, markov_status = analyze_markov_chain(history_list)
 
-    # 第 4 層：智能高熵避險與連爆動態反打
-    dominants = [r['dominant'] for r in four_roads.values()]
-    is_high_entropy = (dominants.count('B') == 2 and dominants.count('P') == 2)
-
+    # 追蹤歷史連爆局數
     consecutive_losses = 0
     for tgt, actual in zip(reversed(ai_targets), reversed(history_list)):
         if tgt and tgt.get('target') and actual != 'T':
@@ -188,24 +194,24 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     is_break_active = False
     is_defense_mode = False
 
-    if consecutive_losses >= 2:
+    # 🛡️ 解鎖盲目防禦：只有當「自信度指數 < 30% 且 連爆 >= 3 局」時才強制進入防禦觀望
+    if consecutive_losses >= 3 and confidence_pct < 30:
+        is_defense_mode = True
+        final_score = 0
+    elif consecutive_losses >= 2:
         is_break_active = True
-        if is_high_entropy:
-            is_defense_mode = True # 亂局高熵鎖 -> 強制觀望
-            final_road_score = 0
-        else:
-            final_road_score = -(raw_road_score + markov_score) * 0.8
+        final_score = -(weighted_road_score + markov_score * 0.5) * 0.75 # 平滑動態修正，不再盲目歸零
     else:
-        final_road_score = raw_road_score + markov_score
+        final_score = weighted_road_score + markov_score * 0.5
 
-    # 綜合動態權重偏置 (無蒙地卡羅後，提高路型與馬爾可夫靈敏度)
-    road_weight_bias = (final_road_score / 100.0) * 12.0
+    # 計算動態偏置
+    road_weight_bias = (final_score / 100.0) * 14.0
     l2_b = NATURAL_B - road_weight_bias
     l2_p = NATURAL_P + road_weight_bias
 
-    # 第 5 層：和局隱性影響動態修正 (Tie Implicit Impact)
+    # 和局隱性修正
     actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
-    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.20
+    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15
     
     post_b = l2_b - tie_implicit_bias
     post_p = l2_p + tie_implicit_bias
@@ -215,11 +221,12 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     final_b_pct = round((post_b / total_weight) * 100, 1)
     final_p_pct = round((post_p / total_weight) * 100, 1)
 
+    # 合理化進場決策門檻 (51.2%)
     recommend = "觀望 (停注)"
     if not is_defense_mode:
-        if final_b_pct >= 52.0:
-            recommend = "建議下注【莊】" + (" (⚔️動態反打)" if is_break_active else "")
-        elif final_p_pct >= 52.0:
-            recommend = "建議下注【閒】" + (" (⚔️動態反打)" if is_break_active else "")
+        if final_b_pct >= 51.2:
+            recommend = "建議下注【莊】" + (" (⚔️動態微調)" if is_break_active else "")
+        elif final_p_pct >= 51.2:
+            recommend = "建議下注【閒】" + (" (⚔️動態微調)" if is_break_active else "")
 
-    return 0.0, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses, markov_status, is_resonance
+    return 0.0, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses, markov_status, is_resonance, confidence_pct
