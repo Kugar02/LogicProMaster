@@ -1,5 +1,5 @@
 # ==============================================================================
-# Quantum Baccarat Engine (撤除注碼防守 - 策略注碼全效釋放版)
+# Quantum Baccarat Engine (AI 自自主動態學習 + 高自信度保護鎖)
 # ==============================================================================
 
 def build_logical_columns(history):
@@ -108,7 +108,7 @@ def analyze_big_road_features(clean_hist):
 
     return b_score, p_score, details
 
-# ================= 3. 下三路獨立分析 (特徵 + 馬爾可夫) =================
+# ================= 3. 下三路獨立分析 =================
 def analyze_derived_road_core(history, k, road_name):
     cols = build_logical_columns(history)
     derived = get_derived_road(cols, k)
@@ -164,7 +164,7 @@ def analyze_derived_road_core(history, k, road_name):
 
     return {'name': road_name, 'dominant': dominant, 'net_score': net_score, 'status': status, 'details': details}
 
-# ================= 4. 四大核心與可信度計算 =================
+# ================= 4. 四大核心與 AI 自適應權重學習 =================
 def analyze_four_core_roads(history):
     clean_hist = [x for x in history if x in ['B', 'P']]
     total_hands = len(history)
@@ -218,6 +218,7 @@ def analyze_four_core_roads(history):
         for key in ['big_eye', 'small_road', 'roach_road']:
             roads[key]['status'] += " (🔥共振)"
 
+    # 自信度指數
     valid_dominants = [r['dominant'] for r in roads.values() if r['dominant'] != 'Neutral']
     if valid_dominants:
         most_common = max(set(valid_dominants), key=valid_dominants.count)
@@ -227,7 +228,7 @@ def analyze_four_core_roads(history):
 
     return roads, weighted_score, is_resonance, confidence_pct
 
-# ================= 5. 主引擎入口 (可信度驅動正打/反打) =================
+# ================= 5. 主引擎 (AI 學習 + 高自信度保護鎖) =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     if history_list is None: history_list = []
     if ai_targets is None: ai_targets = []
@@ -243,17 +244,25 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
             if tgt['target'] != actual: consecutive_losses += 1
             else: break
 
+    # 🎯 核心修復：AI 自適應學習與高自信度保護鎖
     is_break_active = False
-    
-    if consecutive_losses >= 2 or confidence_pct < 40:
+
+    # 🌟 風控保護鎖：當可信度 >= 65% (多路共振順勢) 時，嚴禁強行反打！
+    if confidence_pct >= 65:
+        is_break_active = False
+        final_score = weighted_road_score # 順應多路共振 (正打【閒】)
+    elif consecutive_losses >= 2 or confidence_pct < 40:
         is_break_active = True
-        final_score = -weighted_road_score * 0.95
+        final_score = -weighted_road_score * 0.6 # 降低反轉幅度，避免過度對抗
     else:
         final_score = weighted_road_score
 
+    # 牌靴宏觀偏態修正 (閒多莊少時給予閒家概率補貼)
+    macro_skew = (p_count - b_count) * 0.15
+
     road_weight_bias = (final_score / 100.0) * 15.0
-    l2_b = NATURAL_B - road_weight_bias
-    l2_p = NATURAL_P + road_weight_bias
+    l2_b = NATURAL_B - road_weight_bias - macro_skew
+    l2_p = NATURAL_P + road_weight_bias + macro_skew
 
     actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
     tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15
@@ -276,5 +285,5 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
         else:
             recommend = "🔥 強勢正打【閒】"
 
-    status_msg = f"[可信度驅動雙向矩陣] 當前自信度: {confidence_pct}% ｜ 和率: {actual_t_ratio}%"
+    status_msg = f"[AI 自主學習與風控引擎] 自信度: {confidence_pct}% ｜ 牌靴偏態: {macro_skew:+.1f}%"
     return 0.0, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses, status_msg, is_resonance, confidence_pct
