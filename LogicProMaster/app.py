@@ -91,7 +91,6 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
     
-    # 🎯 撤除注碼防守：完全依據所選策略計算下注注碼，無任何降維鎖定
     if target:
         if st.session_state.strategy == "信號強弱 (1-2-3)":
             diff = abs(final_b_pct - final_p_pct)
@@ -135,7 +134,7 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"${pnl:.2f}")
 st.markdown("---")
 
 # ================= 3. AI 預測建議與雙向矩陣面板 =================
-st.markdown("### 🧠 最終權重預測建議 (可信度驅動正打/反打)")
+st.markdown("### 🧠 最終權重預測建議 (AI 自主學習與保護鎖)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -154,7 +153,7 @@ if total_hands > 0:
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%) 或近局未果，已精準反轉方向執行反打！")
+        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%)，已精準反轉方向執行反打！")
 
 if four_roads_data:
     st.markdown("#### 🔍 4 大核心路單獨立診斷 (獨立特徵 + 獨立馬爾可夫鏈)")
