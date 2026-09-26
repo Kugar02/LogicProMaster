@@ -17,7 +17,8 @@ st.markdown("""
         .stButton>button { height: 45px; font-size: 18px; font-weight: bold; border-radius: 8px; }
         .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 15px; text-align: center; color: white; border: 1px solid #444;}
         .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
-        .pattern-card { background: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+        .pattern-card { background: #262730; border: 1px solid #444; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+        .weight-box { background: #111; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -26,14 +27,13 @@ if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
 # ================= 2. 資金與策略控制台 =================
-st.markdown("### ⚙️ 資金管理與策略設定")
-c1, c2, c3, c4, c5 = st.columns([1.2, 1.2, 1.5, 1.5, 1])
+st.markdown("### ⚙️ 資金管理與注碼策略")
+c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
 st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
 st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=100, step=10)
 st.session_state.strategy = c3.selectbox("📈 選擇注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "馬丁格爾 (Martingale)"])
-st.session_state.break_mode = c4.selectbox("⚔️ 破路/反打機制", ["智能自動", "標準正打", "強制反打"])
 
-if c5.button("🗑️ 清空重置", use_container_width=True): 
+if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True): 
     st.session_state.history = []
     st.session_state.ai_targets = []
     st.rerun()
@@ -89,9 +89,9 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
             st.session_state.ai_targets.extend([None] * len(cleaned))
             st.rerun()
 
-# ================= 4. AI 決策與破路反打分析 =================
+# ================= 4. 最終預測建議與 4 大核心分析 =================
 st.markdown("---")
-st.markdown("### 🧠 100,000 次蒙地卡羅與破路/反打機制分析")
+st.markdown("### 🧠 最終權重預測建議 (四核分拆 + 天生勝率 + 智能破路)")
 
 total_hands = len(st.session_state.history)
 b_count = st.session_state.history.count('B')
@@ -99,18 +99,18 @@ p_count = st.session_state.history.count('P')
 t_count = st.session_state.history.count('T')
 st.session_state.pending_target = None
 
-patterns_data = {}
+four_roads_data = {}
 is_break_active = False
+consec_losses = 0
 
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    with st.spinner("⚡ 正在執行 100,000 次殘牌矩陣模擬與破路反打診斷..."):
-        avg_tc, b_prob, p_prob, t_prob, recommend, pattern_score, patterns_data, is_break_active = run_monte_carlo_with_kelly(
+    with st.spinner("⚡ 運算中：整合 10萬次蒙地卡羅、4大路單分拆、天生勝率底座與和局隱性影響..."):
+        avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses = run_monte_carlo_with_kelly(
             b_count, p_count, t_count, 
             bankroll=st.session_state.bankroll, 
             sim_count=100000, 
             history_list=st.session_state.history,
-            ai_targets=st.session_state.ai_targets,
-            break_mode=st.session_state.break_mode
+            ai_targets=st.session_state.ai_targets
         )
     
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
@@ -118,9 +118,9 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     
     if target:
         if st.session_state.strategy == "信號強弱 (1-2-3)":
-            tc_abs = abs(avg_tc) + abs(pattern_score / 10.0)
-            if tc_abs >= 5: bet_amount = st.session_state.base_unit * 3
-            elif tc_abs >= 2: bet_amount = st.session_state.base_unit * 2
+            diff = abs(final_b_pct - final_p_pct)
+            if diff >= 10: bet_amount = st.session_state.base_unit * 3
+            elif diff >= 5: bet_amount = st.session_state.base_unit * 2
             else: bet_amount = st.session_state.base_unit
         elif st.session_state.strategy == "斐波那契 (Fibonacci)":
             fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
@@ -130,35 +130,46 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
             bet_amount = st.session_state.base_unit * martingale_mult
 
         st.session_state.pending_target = {'target': target, 'amount': bet_amount}
-        
-        if is_break_active:
-            st.error(f"🚨 **破路反打信號觸發：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
-        else:
-            st.success(f"🔥 **AI 順路決策：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
-    else:
-        st.warning(f"🛡️ **防禦信號：當前未產生明顯邊際優勢，建議觀望停注。** (綜合權重分: {pattern_score})")
 
-# 統計數據
+    # 最終權重比重顯示盒
+    st.markdown(f"""
+    <div class="weight-box">
+        <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}</h2>
+        <p style="font-size: 18px; margin-top:8px;">
+            <b>莊家最終權重：<span style="color:#ff4b4b;">{final_b_pct}%</span></b> ｜ 
+            <b>閒家最終權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
+        </p>
+        <small style="color:#aaa;">
+            [底座基準] 天生勝率 (莊 45.86% | 閒 44.62% | 和 9.52%) ｜ 當前和局率: {actual_t_ratio}% (含和局隱性修正)
+        </small>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if is_break_active:
+        st.error(f"🚨 **智能破路反打觸發**：連續 {consec_losses} 局正打爆路，四大路單權重已自動進行 Signal Inversion 反轉加權！")
+
+# 統計數據卡
 sm1, sm2, sm3, sm4 = st.columns(4)
 sm1.metric("策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
 sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
 sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
-# 顯示六大路型與破路狀態儀表板
-if patterns_data:
-    st.markdown("#### 🔍 特徵與破路反打機制診斷")
-    p_cols = st.columns(3)
-    p_keys = list(patterns_data.keys())
-    for i, k in enumerate(p_keys):
-        item = patterns_data[k]
+# 顯示 4 大核心路單獨立診斷儀表板
+if four_roads_data:
+    st.markdown("#### 🔍 4 大核心路單獨立分析診斷")
+    r_cols = st.columns(4)
+    r_keys = list(four_roads_data.keys())
+    for i, k in enumerate(r_keys):
+        item = four_roads_data[k]
         score_str = f"+{item['score']}" if item['score'] > 0 else f"{item['score']}"
-        color = "red" if "破路" in item['name'] or "🚨" in item['status'] else ("green" if item['score'] != 0 else "gray")
-        with p_cols[i % 3]:
+        color = "green" if item['score'] != 0 else "gray"
+        with r_cols[i]:
             st.markdown(f"""
             <div class="pattern-card">
-                <b>{item['name']}</b> <span style="color:{color}; float:right;">權重: {score_str}</span><br>
-                <small style="color:#aaa;">狀態: {item['status']}</small>
+                <b>{item['name']}</b><br>
+                <span style="color:{color}; font-size:14px;">權重偏向: {score_str}</span><br>
+                <small style="color:#aaa;">{item['status']}</small>
             </div>
             """, unsafe_allow_html=True)
 
