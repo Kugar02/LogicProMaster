@@ -91,28 +91,26 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
     
+    # 🎯 撤除注碼防守：完全依據所選策略計算下注注碼，無任何降維鎖定
     if target:
-        if is_break_active:
-            current_bet = st.session_state.base_unit # 反打試探期鎖定 1 個注碼保本
-        else:
-            if st.session_state.strategy == "信號強弱 (1-2-3)":
-                diff = abs(final_b_pct - final_p_pct)
-                if diff >= 10: current_bet = st.session_state.base_unit * 3
-                elif diff >= 5: current_bet = st.session_state.base_unit * 2
-                else: current_bet = st.session_state.base_unit
-                
-            elif st.session_state.strategy == "斐波那契 (Fibonacci)":
-                fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
-                idx = min(fibo_idx, len(fibo_seq)-1)
-                current_bet = st.session_state.base_unit * fibo_seq[idx]
-                
-            elif st.session_state.strategy == "雙頭龍":
-                dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
-                idx = min(double_dragon_idx, len(dd_seq)-1)
-                current_bet = st.session_state.base_unit * dd_seq[idx]
-                
-            elif st.session_state.strategy == "不倒翁投注法":
-                current_bet = st.session_state.base_unit * tumbler_unit
+        if st.session_state.strategy == "信號強弱 (1-2-3)":
+            diff = abs(final_b_pct - final_p_pct)
+            if diff >= 10: current_bet = st.session_state.base_unit * 3
+            elif diff >= 5: current_bet = st.session_state.base_unit * 2
+            else: current_bet = st.session_state.base_unit
+            
+        elif st.session_state.strategy == "斐波那契 (Fibonacci)":
+            fibo_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+            idx = min(fibo_idx, len(fibo_seq)-1)
+            current_bet = st.session_state.base_unit * fibo_seq[idx]
+            
+        elif st.session_state.strategy == "雙頭龍":
+            dd_seq = [1, 1, 2, 2, 4, 4, 8, 8, 16, 16, 32, 32]
+            idx = min(double_dragon_idx, len(dd_seq)-1)
+            current_bet = st.session_state.base_unit * dd_seq[idx]
+            
+        elif st.session_state.strategy == "不倒翁投注法":
+            current_bet = st.session_state.base_unit * tumbler_unit
 
 # ================= 2. 資金管理與注碼策略整合面板 =================
 st.markdown("### ⚙️ 資金管理與注碼策略 (實時整合監控)")
@@ -156,7 +154,7 @@ if total_hands > 0:
     """, unsafe_allow_html=True)
 
     if is_break_active:
-        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%) 或近局未果，已精準反轉方向並鎖定 1 個注碼防守。")
+        st.info(f"⚔️ **智能反打機制生效中**：正打規律弱化 (自信度 {confidence_pct}%) 或近局未果，已精準反轉方向執行反打！")
 
 if four_roads_data:
     st.markdown("#### 🔍 4 大核心路單獨立診斷 (獨立特徵 + 獨立馬爾可夫鏈)")
