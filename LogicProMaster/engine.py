@@ -1,5 +1,5 @@
 # ==============================================================================
-# Quantum Baccarat Engine (可信度直接驅動正打/反打版 - 告別鎖死觀望)
+# Quantum Baccarat Engine (撤除注碼防守 - 策略注碼全效釋放版)
 # ==============================================================================
 
 def build_logical_columns(history):
@@ -77,9 +77,6 @@ def analyze_big_road_features(clean_hist):
         details.append(f"雙跳【{'莊' if target=='B' else '閒'}】")
 
     streak = 1
-    for i in range(n-2, -1, -1):
-        if seq[i] == seq[-1]: streak += 1 if 'seq' in locals() else 0
-        else: break
     for i in range(n-2, -1, -1):
         if clean_hist[i] == clean_hist[-1]: streak += 1
         else: break
@@ -221,7 +218,6 @@ def analyze_four_core_roads(history):
         for key in ['big_eye', 'small_road', 'roach_road']:
             roads[key]['status'] += " (🔥共振)"
 
-    # 🎯 計算訊號可信度百分比 (Confidence Index)
     valid_dominants = [r['dominant'] for r in roads.values() if r['dominant'] != 'Neutral']
     if valid_dominants:
         most_common = max(set(valid_dominants), key=valid_dominants.count)
@@ -231,7 +227,7 @@ def analyze_four_core_roads(history):
 
     return roads, weighted_score, is_resonance, confidence_pct
 
-# ================= 5. 主引擎入口 (可信度直接驅動正打/反打) =================
+# ================= 5. 主引擎入口 (可信度驅動正打/反打) =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     if history_list is None: history_list = []
     if ai_targets is None: ai_targets = []
@@ -247,15 +243,13 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
             if tgt['target'] != actual: consecutive_losses += 1
             else: break
 
-    # 🎯 可信度直接驅動正打 vs 反打機制
     is_break_active = False
     
-    # 若連爆 >= 2 局 或 可信度指數低於 40%，觸發「智能反打」
     if consecutive_losses >= 2 or confidence_pct < 40:
         is_break_active = True
-        final_score = -weighted_road_score * 0.95 # 訊號精準反轉
+        final_score = -weighted_road_score * 0.95
     else:
-        final_score = weighted_road_score # 正常強勢正打
+        final_score = weighted_road_score
 
     road_weight_bias = (final_score / 100.0) * 15.0
     l2_b = NATURAL_B - road_weight_bias
@@ -271,7 +265,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     final_b_pct = round((post_b / total_weight) * 100, 1)
     final_p_pct = round((post_p / total_weight) * 100, 1)
 
-    # 🎯 告別鎖死觀望，由可信度與權重輸出【正打】或【反打】
     if final_b_pct >= final_p_pct:
         if is_break_active:
             recommend = "⚔️ 智能反打【莊】"
