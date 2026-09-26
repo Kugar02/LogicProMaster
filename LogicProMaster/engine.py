@@ -40,130 +40,93 @@ def simulate_single_hand(shoe_cards):
     elif p_score > b_score: return 'P'
     else: return 'T'
 
-def analyze_patterns(history, ai_targets=None, break_mode="智能自動"):
+# --- 四大路單構建輔助函數 ---
+def build_logical_columns(history):
+    cols, current_col, last_res = [], [], None
+    for res in history:
+        if res == 'T': continue
+        if res != last_res:
+            if current_col: cols.append(current_col)
+            current_col = [res]; last_res = res
+        else: current_col.append(res)
+    if current_col: cols.append(current_col)
+    return cols
+
+def get_derived_road(cols, k):
+    derived = []
+    for c in range(1, len(cols)):
+        for r in range(len(cols[c])):
+            if c < k: continue
+            if r == 0:
+                if c < k + 1: continue
+                derived.append('Red' if len(cols[c-1]) == len(cols[c-1-k]) else 'Blue')
+            else:
+                len_ref = len(cols[c-k])
+                if len_ref >= r + 1: derived.append('Red')
+                elif len_ref == r: derived.append('Blue')
+                else: derived.append('Red')
+    return derived
+
+def analyze_four_core_roads(history):
     """
-    六大路型特徵 + 破路/反打機制判斷
+    將大路與下三路分拆，構成 4 大核心分析模組
+    回傳四大路單各自的傾向分 (正數偏閒，負數偏莊)
     """
     clean_hist = [x for x in history if x in ['B', 'P']]
     n = len(clean_hist)
     
-    patterns = {
-        'single_jump': {'name': '單跳 (B-P-B-P)', 'score': 0, 'status': '未觸發'},
-        'double_jump': {'name': '雙跳 (BB-PP)', 'score': 0, 'status': '未觸發'},
-        'dragon': {'name': '長龍與斬龍趨勢', 'score': 0, 'status': '未觸發'},
-        'room_hall': {'name': '房廳結構 (1房2廳/2房1廳)', 'score': 0, 'status': '未觸發'},
-        'jump_and_streak': {'name': '逢跳連 (跳後必連)', 'score': 0, 'status': '未觸發'},
-        'nine_grid': {'name': '九宮格矩陣對稱性', 'score': 0, 'status': '未觸發'},
-        'break_road': {'name': '破路 / 反打狀態判斷', 'score': 0, 'status': '常規順路模式'}
+    road_scores = {
+        'big_road': {'name': '1. 大路核心 (Big Road)', 'score': 0, 'status': '觀望'},
+        'big_eye': {'name': '2. 大眼仔路 (Big Eye)', 'score': 0, 'status': '觀望'},
+        'small_road': {'name': '3. 小路核心 (Small Road)', 'score': 0, 'status': '觀望'},
+        'roach_road': {'name': '4. 曱甴路核心 (Roach Road)', 'score': 0, 'status': '觀望'}
     }
     
     if n < 3:
-        return 0, patterns, False
+        return road_scores
 
-    # 1. 單跳偵測
-    if n >= 3:
-        if clean_hist[-1] != clean_hist[-2] and clean_hist[-2] != clean_hist[-3]:
-            next_target = 'B' if clean_hist[-1] == 'P' else 'P'
-            score = 15 if next_target == 'P' else -15
-            patterns['single_jump']['score'] = score
-            patterns['single_jump']['status'] = f"連跳 3+ 局，預估下局開【{'閒' if next_target=='P' else '莊'}】"
-
-    # 2. 雙跳偵測
-    if n >= 4:
-        if clean_hist[-1] == clean_hist[-2] and clean_hist[-3] == clean_hist[-4] and clean_hist[-1] != clean_hist[-3]:
-            next_target = 'B' if clean_hist[-1] == 'P' else 'P'
-            score = 20 if next_target == 'P' else -20
-            patterns['double_jump']['score'] = score
-            patterns['double_jump']['status'] = f"雙跳成型，預估轉項開【{'閒' if next_target=='P' else '莊'}】"
-
-    # 3. 長龍 / 斬龍 (破路) 偵測
+    # 1. 大路分析 (長龍、單跳、雙跳)
     streak = 1
     for i in range(n-2, -1, -1):
         if clean_hist[i] == clean_hist[-1]: streak += 1
         else: break
         
     if streak >= 3:
-        curr_dragon = clean_hist[-1]
-        if streak >= 6:
-            # 長龍連開6局以上，觸發斬龍/破路反打
-            anti_target = 'B' if curr_dragon == 'P' else 'P'
-            score = 30 if anti_target == 'P' else -30
-            patterns['dragon']['score'] = score
-            patterns['dragon']['status'] = f"⚡ 【斬龍破路】{'莊' if curr_dragon=='B' else '閒'}龍達 {streak} 局極限，反打【{'閒' if anti_target=='P' else '莊'}】"
-        else:
-            next_target = curr_dragon
-            score = (streak * 10) if next_target == 'P' else -(streak * 10)
-            patterns['dragon']['score'] = score
-            patterns['dragon']['status'] = f"🔥 {'莊' if next_target=='B' else '閒'}龍連開 {streak} 局，順龍看好【{'閒' if next_target=='P' else '莊'}】"
+        target = clean_hist[-1]
+        s = (streak * 8) if target == 'P' else -(streak * 8)
+        road_scores['big_road']['score'] = s
+        road_scores['big_road']['status'] = f"{'閒' if target=='P' else '莊'}龍趨勢 (連開 {streak} 局)"
+    elif clean_hist[-1] != clean_hist[-2]:
+        target = 'B' if clean_hist[-1] == 'P' else 'P'
+        s = 12 if target == 'P' else -12
+        road_scores['big_road']['score'] = s
+        road_scores['big_road']['status'] = "單跳走勢中"
 
-    # 4. 房廳結構
-    if n >= 6:
-        block3 = clean_hist[-3:]
-        prev_block3 = clean_hist[-6:-3]
-        if block3 == prev_block3 and len(set(block3)) == 2:
-            predict_next = block3[0]
-            score = 15 if predict_next == 'P' else -15
-            patterns['room_hall']['score'] = score
-            patterns['room_hall']['status'] = f"觸發房廳週期，看好【{'閒' if predict_next=='P' else '莊'}】"
-
-    # 5. 逢跳連
-    if n >= 5:
-        jumps_then_streak = True
-        for i in range(2, n-1):
-            if clean_hist[i] != clean_hist[i-1] and clean_hist[i-1] == clean_hist[i-2]:
-                if clean_hist[i+1] != clean_hist[i]:
-                    jumps_then_streak = False
-                    break
-        if jumps_then_streak and clean_hist[-1] != clean_hist[-2]:
-            next_target = clean_hist[-1]
-            score = 18 if next_target == 'P' else -18
-            patterns['jump_and_streak']['score'] = score
-            patterns['jump_and_streak']['status'] = f"逢跳必連成型，看好【{'閒' if next_target=='P' else '莊'}】連開"
-
-    # 6. 九宮格
-    if n >= 9:
-        grid9 = clean_hist[-9:]
-        b_grid_count = grid9.count('B')
-        p_grid_count = grid9.count('P')
-        if b_grid_count > p_grid_count + 2:
-            patterns['nine_grid']['score'] = 12
-            patterns['nine_grid']['status'] = f"九宮格莊多({b_grid_count}/9)，修正看好【閒】"
-        elif p_grid_count > b_grid_count + 2:
-            patterns['nine_grid']['score'] = -12
-            patterns['nine_grid']['status'] = f"九宮格閒多({p_grid_count}/9)，修正看好【莊】"
-
-    # 7. 破路 / 反打機制核心判斷 (Break Road Mechanism)
-    is_break_active = False
-    consecutive_losses = 0
-    if ai_targets:
-        for tgt, actual in zip(reversed(ai_targets), reversed(history)):
-            if tgt and tgt.get('target') and actual != 'T':
-                if tgt['target'] != actual:
-                    consecutive_losses += 1
-                else:
-                    break
+    # 2-4. 下三路獨立分析 (大眼仔、小路、曱甴路)
+    logical_cols = build_logical_columns(history)
     
-    if break_mode == "強制反打" or (break_mode == "智能自動" and consecutive_losses >= 2):
-        is_break_active = True
-        raw_score = sum(p['score'] for k, p in patterns.items() if k != 'break_road')
-        # 反轉總訊號，權重放大 1.2 倍強勢反打
-        patterns['break_road']['score'] = int(-raw_score * 1.2)
-        patterns['break_road']['status'] = f"🚨 【破路反打啟動】連續 {consecutive_losses} 局正打爆路，訊號全面反轉反打！"
-    else:
-        patterns['break_road']['status'] = f"✅ 盤勢穩定，維持常規順路 (近勝負連敗: {consecutive_losses})"
+    for k, key_name, road_title in [(1, 'big_eye', '大眼仔路'), (2, 'small_road', '小路'), (3, 'roach_road', '曱甴路')]:
+        derived = get_derived_road(logical_cols, k)
+        if derived:
+            recent = derived[-3:]
+            red_cnt = recent.count('Red')
+            blue_cnt = recent.count('Blue')
+            # 紅筆多代表整齊規律，藍筆多代表雜亂
+            if red_cnt > blue_cnt:
+                road_scores[key_name]['score'] = 10 if clean_hist[-1] == 'P' else -10
+                road_scores[key_name]['status'] = f"{road_title}呈現整齊紅筆，順勢看好"
+            elif blue_cnt > red_cnt:
+                road_scores[key_name]['score'] = -10 if clean_hist[-1] == 'P' else 10
+                road_scores[key_name]['status'] = f"{road_title}呈現藍筆跳路，看好轉項"
 
-    if is_break_active:
-        total_pattern_score = patterns['break_road']['score']
-    else:
-        total_pattern_score = sum(p['score'] for k, p in patterns.items() if k != 'break_road')
+    return road_scores
 
-    return total_pattern_score, patterns, is_break_active
-
-def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None, break_mode="智能自動"):
+def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     """
-    100,000 次蒙地卡羅殘牌矩陣 + 六大路型 + 破路反打綜合演算法
+    100,000 次蒙地卡羅 + 4大路單分拆 + 天生勝率底座 + 和局隱性影響 + 智能破路整合
     """
     if history_list is None: history_list = []
+    if ai_targets is None: ai_targets = []
         
     total_hands = b_count + p_count + t_count
     cards_used = int(total_hands * 4.9)
@@ -171,6 +134,17 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     remaining_cards = max(total_cards - cards_used, 52)
     remaining_decks = max(remaining_cards / 52.0, 1.0)
     
+    # 1. 天生勝率概念基礎 (Natural Base Probabilities)
+    NATURAL_B = 45.86
+    NATURAL_P = 44.62
+    NATURAL_T = 9.52
+
+    # 2. 和局隱性影響機制 (Tie Implicit Impact)
+    # 和局雖不影響大路，但消耗殘牌且拉長盤局，若和局率偏離 9.52%，調整波動修正分
+    actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
+    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.15 # 和局影響微調權重
+
+    # 3. 執行 100,000 次蒙地卡羅殘牌矩陣模擬
     raw_rc = (p_count - b_count) * 0.5
     avg_tc = raw_rc / remaining_decks
 
@@ -183,36 +157,52 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     if cards_used > 0 and len(shoe_list) > cards_used:
         shoe_list = shoe_list[cards_used:]
 
-    if len(shoe_list) < 6:
-        return None, 0, 0, 0, "剩餘牌數不足", 0, {}, False
-
-    # 100,000 次蒙地卡羅殘牌模擬
     results = {'B': 0, 'P': 0, 'T': 0}
-    for _ in range(sim_count):
-        res = simulate_single_hand(shoe_list)
-        if res: results[res] += 1
+    if len(shoe_list) >= 6:
+        for _ in range(sim_count):
+            res = simulate_single_hand(shoe_list)
+            if res: results[res] += 1
 
-    total_sims = sum(results.values())
+    total_sims = max(1, sum(results.values()))
     mc_b_prob = (results['B'] / total_sims) * 100
     mc_p_prob = (results['P'] / total_sims) * 100
-    mc_t_prob = (results['T'] / total_sims) * 100
 
-    # 路形特徵 + 破路/反打機制
-    pattern_score, patterns_detail, is_break_active = analyze_patterns(history_list, ai_targets, break_mode)
+    # 4. 拆解 4 大核心路單分析
+    four_roads = analyze_four_core_roads(history_list)
+    raw_road_score = sum(r['score'] for r in four_roads.values())
 
-    # 綜合權重加權
-    weight_bias = (pattern_score / 100.0) * 6.0
+    # 5. 整合智能破路 / 反打策略 (自動檢測連爆連敗)
+    consecutive_losses = 0
+    for tgt, actual in zip(reversed(ai_targets), reversed(history_list)):
+        if tgt and tgt.get('target') and actual != 'T':
+            if tgt['target'] != actual: consecutive_losses += 1
+            else: break
+            
+    is_break_active = False
+    if consecutive_losses >= 2:
+        is_break_active = True
+        final_road_score = -raw_road_score * 1.3 # 強制反轉 4 大路單權重 1.3 倍
+    else:
+        final_road_score = raw_road_score
+
+    # 6. 整合最終權重百分比對比 (天生勝率 + 蒙地卡羅 + 4大路單 + 和局隱性)
+    # 將所有動態因子折算為莊閒權重
+    road_weight_bias = (final_road_score / 100.0) * 8.0 # 最大 ±8% 影響
     
-    final_p_prob = max(0.0, min(100.0, mc_p_prob + weight_bias))
-    final_b_prob = max(0.0, min(100.0, mc_b_prob - weight_bias))
+    # 計算複合權重比值
+    composite_b = NATURAL_B + (mc_b_prob - NATURAL_B) * 0.4 - road_weight_bias - tie_implicit_bias
+    composite_p = NATURAL_P + (mc_p_prob - NATURAL_P) * 0.4 + road_weight_bias + tie_implicit_bias
 
-    ev_b = (final_b_prob / 100 * 0.95) - (final_p_prob / 100)
-    ev_p = (final_p_prob / 100 * 1.0) - (final_b_prob / 100)
+    # 歸一化為 100% 莊閒對比百分比 (不含和局)
+    total_bp = composite_b + composite_p
+    final_b_pct = round((composite_b / total_bp) * 100, 1)
+    final_p_pct = round((composite_p / total_bp) * 100, 1)
 
+    # 輸出最終建議
     recommend = "觀望 (停注)"
-    if ev_b > 0 and ev_b > ev_p and final_b_prob > 48.5:
-        recommend = "建議下注【莊】" + (" (⚔️破路反打)" if is_break_active else "")
-    elif ev_p > 0 and ev_p > ev_b and final_p_prob > 50.0:
-        recommend = "建議下注【閒】" + (" (⚔️破路反打)" if is_break_active else "")
+    if final_b_pct >= 52.5:
+        recommend = "建議下注【莊】" + (" (⚔️智能破路反打)" if is_break_active else "")
+    elif final_p_pct >= 52.5:
+        recommend = "建議下注【閒】" + (" (⚔️智能破路反打)" if is_break_active else "")
 
-    return avg_tc, final_b_prob, final_p_prob, mc_t_prob, recommend, pattern_score, patterns_detail, is_break_active
+    return avg_tc, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses
