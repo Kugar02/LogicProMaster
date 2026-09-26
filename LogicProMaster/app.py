@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 
-# 載入運算大腦 (engine.py)
+# 嘗試載入計算引擎
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
     run_monte_carlo_with_kelly = None
 
+# ================= 1. 系統全域設定 =================
 st.set_page_config(page_title="Quantum Baccarat OS", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -14,7 +15,7 @@ st.markdown("""
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
         .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
         .stButton>button { height: 45px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-        .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 10px; text-align: center; color: white; border: 1px solid #444;}
+        .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 15px; text-align: center; color: white; border: 1px solid #444;}
         .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
     </style>
 """, unsafe_allow_html=True)
@@ -23,7 +24,7 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 1. 頂部策略與資金控制台 =================
+# ================= 2. 頂部策略與資金控制台 =================
 st.markdown("### ⚙️ 資金管理與策略設定")
 c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
 st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
@@ -54,7 +55,7 @@ for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
             fibo_idx += 1
             martingale_mult *= 2
 
-# ================= 2. 實時開牌輸入區 =================
+# ================= 3. 實時開牌輸入區 =================
 st.markdown("### 🎛️ 開牌輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
@@ -72,7 +73,7 @@ if btn_col4.button("↩️ 撤銷上一手", use_container_width=True):
         st.session_state.ai_targets.pop()
     st.rerun()
 
-# ================= 3. AI 決策面板 =================
+# ================= 4. AI 決策面板 =================
 st.markdown("---")
 st.markdown("### 🧠 AI 決策與策略統計")
 
@@ -114,7 +115,7 @@ sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 
 sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
-# ================= 4. 五路圖表核心引擎 (CSS Grid 修復版) =================
+# ================= 5. 圖表與下三路核心引擎 =================
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
     for res in history:
@@ -127,18 +128,19 @@ def build_logical_columns(history):
     return cols
 
 def get_derived_road(cols, k):
+    # 徹底修復：輸出明確的 'Red' 和 'Blue'，避免與莊家 'B' 發生字串衝突
     derived = []
     for c in range(1, len(cols)):
         for r in range(len(cols[c])):
             if c < k: continue
             if r == 0:
                 if c < k + 1: continue
-                derived.append('R' if len(cols[c-1]) == len(cols[c-1-k]) else 'B')
+                derived.append('Red' if len(cols[c-1]) == len(cols[c-1-k]) else 'Blue')
             else:
                 len_ref = len(cols[c-k])
-                if len_ref >= r + 1: derived.append('R')
-                elif len_ref == r: derived.append('B')
-                else: derived.append('R')
+                if len_ref >= r + 1: derived.append('Red')
+                elif len_ref == r: derived.append('Blue')
+                else: derived.append('Red')
     return derived
 
 def layout_road_matrix(data_list, rows=6):
@@ -160,7 +162,6 @@ def layout_road_matrix(data_list, rows=6):
     return grid
 
 def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
-    # 採用 CSS Grid 取代 HTML Table，100% 防範跑版
     html = f'<div style="display: grid; grid-template-columns: repeat({cols}, {cell_size}px); grid-template-rows: repeat({rows}, {cell_size}px); gap: 0; background: #fff; border: 1px solid #ccc; width: max-content;">'
     for r in range(rows):
         for c in range(cols):
@@ -169,7 +170,11 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
             if cell:
                 val = cell['val'] if isinstance(cell, dict) else cell
                 ties = cell.get('ties', 0) if isinstance(cell, dict) else 0
-                color = "#e81123" if val in ['B', 'R'] else "#0078d7"
+                
+                # 顏色分流：莊/紅筆 -> 紅色，閒/藍筆 -> 藍色
+                if val in ['B', 'Red']: color = "#e81123"
+                elif val in ['P', 'Blue']: color = "#0078d7"
+                else: color = "#2ca02c"
                 
                 if road_type == "bead":
                     bg = "#e81123" if val == 'B' else "#0078d7" if val == 'P' else "#2ca02c"
@@ -187,7 +192,7 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
     html += '</div>'
     return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
 
-# ================= 5. 渲染圖表 =================
+# ================= 6. 渲染圖表 =================
 st.markdown("---")
 st.markdown("### 📊 專業娛樂城路紙 (五路全開)")
 
@@ -212,3 +217,46 @@ col_bot1, col_bot2, col_bot3 = st.columns(3)
 with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 1)), cols=24, cell_size=18, road_type="big_eye"), unsafe_allow_html=True)
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
+
+
+# ================= 7. 莊閒精確問路 (Ask Road) =================
+def get_ask_road_symbols(history, test_val):
+    temp_hist = history + [test_val]
+    temp_cols = build_logical_columns(temp_hist)
+    e = get_derived_road(temp_cols, 1)
+    s = get_derived_road(temp_cols, 2)
+    r = get_derived_road(temp_cols, 3)
+    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
+
+ask_b = get_ask_road_symbols(st.session_state.history, 'B')
+ask_p = get_ask_road_symbols(st.session_state.history, 'P')
+
+def draw_ask_icon(val, r_type):
+    if not val: return "<div style='width:20px; height:20px;'></div>"
+    color = "#e81123" if val == 'Red' else "#0078d7"
+    if r_type == 'eye': return f"<div style='width:16px;height:16px;border:3px solid {color};border-radius:50%;'></div>"
+    if r_type == 'small': return f"<div style='width:16px;height:16px;background:{color};border-radius:50%;'></div>"
+    if r_type == 'roach': return f"<div style='width:16px;height:4px;background:{color};transform:rotate(-45deg);margin-top:6px;'></div>"
+
+st.markdown("### 🔮 莊閒問路")
+col_ask_b, col_ask_p = st.columns(2)
+
+with col_ask_b:
+    st.markdown(f"""
+    <div class="ask-road-box">
+        <h4 style="color:#e81123; margin:0; padding-bottom: 5px;">🔴 莊問路 (Banker)</h4>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_b[0], 'eye')} {draw_ask_icon(ask_b[1], 'small')} {draw_ask_icon(ask_b[2], 'roach')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_ask_p:
+    st.markdown(f"""
+    <div class="ask-road-box">
+        <h4 style="color:#0078d7; margin:0; padding-bottom: 5px;">🔵 閒問路 (Player)</h4>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_p[0], 'eye')} {draw_ask_icon(ask_p[1], 'small')} {draw_ask_icon(ask_p[2], 'roach')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
