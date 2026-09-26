@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 
-# 嘗試載入計算引擎
+# 載入核心大腦
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
     run_monte_carlo_with_kelly = None
 
-# ================= 1. 系統全域設定 =================
-st.set_page_config(page_title="Quantum Baccarat OS", layout="wide", initial_sidebar_state="collapsed")
+# ================= 1. 頁面配置 =================
+st.set_page_config(page_title="Quantum Baccarat 100K OS", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -17,6 +17,7 @@ st.markdown("""
         .stButton>button { height: 45px; font-size: 18px; font-weight: bold; border-radius: 8px; }
         .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 15px; text-align: center; color: white; border: 1px solid #444;}
         .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
+        .pattern-card { background: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -24,7 +25,7 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 2. 頂部策略與資金控制台 =================
+# ================= 2. 資金與策略控制台 =================
 st.markdown("### ⚙️ 資金管理與策略設定")
 c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
 st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
@@ -55,8 +56,8 @@ for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
             fibo_idx += 1
             martingale_mult *= 2
 
-# ================= 3. 實時開牌與批量輸入區 =================
-st.markdown("### 🎛️ 開牌輸入")
+# ================= 3. 輸入控制面板 =================
+st.markdown("### 🎛️ 開牌紀錄輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
 def record_hand(result):
@@ -73,25 +74,23 @@ if btn_col4.button("↩️ 撤銷上一手", use_container_width=True):
         st.session_state.ai_targets.pop()
     st.rerun()
 
-# ⭐️ 新增：批量輸入歷史路單
+# 批量輸入
 with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
-    batch_input = st.text_input("請輸入歷史賽果 (支援 B/P/T 或 莊/閒/和，無需空格)", placeholder="例如: 莊莊閒和莊 或 BBPTP")
+    batch_input = st.text_input("請輸入歷史賽果 (例如: 莊莊閒和莊 或 BBPTP)", placeholder="BBPTP...")
     if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
         cleaned = []
         for char in batch_input:
             if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
             elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
             elif char in ['T', 't', '和']: cleaned.append('T')
-        
         if cleaned:
-            # 將解析結果加入歷史，並同步補齊 AI 的空白佔位符，以免打亂回測統計
             st.session_state.history.extend(cleaned)
             st.session_state.ai_targets.extend([None] * len(cleaned))
             st.rerun()
 
-# ================= 4. AI 決策面板 =================
+# ================= 4. AI 決策與六大路型分析面板 =================
 st.markdown("---")
-st.markdown("### 🧠 AI 決策與策略統計")
+st.markdown("### 🧠 100,000 次蒙地卡羅與六大路型加權分析")
 
 total_hands = len(st.session_state.history)
 b_count = st.session_state.history.count('B')
@@ -99,17 +98,23 @@ p_count = st.session_state.history.count('P')
 t_count = st.session_state.history.count('T')
 st.session_state.pending_target = None
 
+patterns_data = {}
+
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    avg_tc, b_prob, p_prob, t_prob, recommend, _, _ = run_monte_carlo_with_kelly(
-        b_count, p_count, t_count, bankroll=st.session_state.bankroll, sim_count=10000
-    )
+    with st.spinner("⚡ 正在執行 100,000 次殘牌矩陣模擬與六大路型分析..."):
+        avg_tc, b_prob, p_prob, t_prob, recommend, pattern_score, patterns_data = run_monte_carlo_with_kelly(
+            b_count, p_count, t_count, 
+            bankroll=st.session_state.bankroll, 
+            sim_count=100000, 
+            history_list=st.session_state.history
+        )
     
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
     bet_amount = 0
     
     if target:
         if st.session_state.strategy == "信號強弱 (1-2-3)":
-            tc_abs = abs(avg_tc)
+            tc_abs = abs(avg_tc) + abs(pattern_score / 10.0)
             if tc_abs >= 5: bet_amount = st.session_state.base_unit * 3
             elif tc_abs >= 2: bet_amount = st.session_state.base_unit * 2
             else: bet_amount = st.session_state.base_unit
@@ -121,17 +126,35 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
             bet_amount = st.session_state.base_unit * martingale_mult
 
         st.session_state.pending_target = {'target': target, 'amount': bet_amount}
-        st.success(f"🔥 **下局目標：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}**")
+        st.success(f"🔥 **AI 最終決策：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 真實勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
     else:
-        st.warning(f"🛡️ **防禦信號：當前無明顯優勢，建議觀望停注。**")
+        st.warning(f"🛡️ **防禦信號：當前未產生明顯邊際優勢，建議觀望停注。** (綜合權重分: {pattern_score})")
 
+# 統計數據
 sm1, sm2, sm3, sm4 = st.columns(4)
 sm1.metric("策略歷史下注", f"{total_bets} 局", f"勝 {wins} / 負 {losses}")
 sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 else "0.0%")
 sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
-# ================= 5. 圖表與下三路核心引擎 =================
+# 顯示六大路型特徵儀表板
+if patterns_data:
+    st.markdown("#### 🔍 六大路型特徵動態診斷")
+    p_cols = st.columns(3)
+    p_keys = list(patterns_data.keys())
+    for i, k in enumerate(p_keys):
+        item = patterns_data[k]
+        score_str = f"+{item['score']}" if item['score'] > 0 else f"{item['score']}"
+        color = "green" if item['score'] != 0 else "gray"
+        with p_cols[i % 3]:
+            st.markdown(f"""
+            <div class="pattern-card">
+                <b>{item['name']}</b> <span style="color:{color}; float:right;">權重: {score_str}</span><br>
+                <small style="color:#aaa;">狀態: {item['status']}</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ================= 5. 五路圖表與問路引擎 =================
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
     for res in history:
@@ -186,7 +209,6 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
                 val = cell['val'] if isinstance(cell, dict) else cell
                 ties = cell.get('ties', 0) if isinstance(cell, dict) else 0
                 
-                # 顏色分流：莊/紅筆 -> 紅色，閒/藍筆 -> 藍色
                 if val in ['B', 'Red']: color = "#e81123"
                 elif val in ['P', 'Blue']: color = "#0078d7"
                 else: color = "#2ca02c"
@@ -207,7 +229,6 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
     html += '</div>'
     return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
 
-# ================= 6. 渲染圖表 =================
 st.markdown("---")
 st.markdown("### 📊 專業娛樂城路紙 (五路全開)")
 
@@ -233,8 +254,7 @@ with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(l
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
 
-
-# ================= 7. 莊閒精確問路 (Ask Road) =================
+# 莊閒問路
 def get_ask_road_symbols(history, test_val):
     temp_hist = history + [test_val]
     temp_cols = build_logical_columns(temp_hist)
