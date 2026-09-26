@@ -41,20 +41,17 @@ for tgt, actual in zip(st.session_state.ai_targets, st.session_state.history):
             wins += 1
             pnl += (amt * 0.95) if actual == 'B' else amt
             
-            # 獲勝時更新策略階段
             fibo_idx = max(0, fibo_idx - 2)
-            double_dragon_idx = 0  # 雙頭龍贏局重置
-            tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1 # 不倒翁贏進 1->2->3，達3後重置
+            double_dragon_idx = 0
+            tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1
         else:
             losses += 1
             pnl -= amt
             
-            # 落敗時更新策略階段
             fibo_idx += 1
-            double_dragon_idx += 1 # 雙頭龍輸局進階 (1,1,2,2,4,4,8,8...)
-            tumbler_unit = 1 # 不倒翁輸局保本重置為 1 注
+            double_dragon_idx += 1
+            tumbler_unit = 1
 
-# 預先運行 AI 預測以計算「當前下注注碼」
 total_hands = len(st.session_state.history)
 b_count = st.session_state.history.count('B')
 p_count = st.session_state.history.count('P')
@@ -115,7 +112,6 @@ if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True):
     st.session_state.ai_targets = []
     st.rerun()
 
-# 整合數據儀表板
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("💰 當前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0 (觀望)")
@@ -137,7 +133,7 @@ if total_hands > 0:
             <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [流水線順序] 底座(莊45.86%|閒44.62%) ➔ 四核6特徵路型 ➔ 隱性修正(和率{actual_t_ratio}%) ➔ 100K殘牌MC ➔ 歸一化
+            [流水線順序] 底座(莊45.86%|閒44.62%) ➔ 四核5特徵路型 ➔ 隱性修正(和率{actual_t_ratio}%) ➔ 100K殘牌MC ➔ 歸一化
         </small>
     </div>
     """, unsafe_allow_html=True)
@@ -146,7 +142,7 @@ if total_hands > 0:
         st.error(f"🚨 **智能破路反打觸發**：連續 {consec_losses} 局正打爆路，四大路單權重已自動進行 Signal Inversion 反轉加權！")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (各別跑滿六大特徵並取強者)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (各別跑滿五大特徵並取強者)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
@@ -157,16 +153,15 @@ if four_roads_data:
             <div class="pattern-card">
                 <b>{item['name']}</b><br>
                 <span style="color:{color}; font-size:13px; font-weight:bold;">{item['status']}</span><br>
-                <small style="color:#aaa;">六特徵明細: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
+                <small style="color:#aaa;">五特徵明細: {", ".join(item['details']) if item['details'] else '無明顯特徵'}</small>
             </div>
             """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# ================= 4. 統合歷史數據介面 (開牌輸入 + 莊閒問路 + 專業路紙) =================
+# ================= 4. 統合歷史數據介面 =================
 st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
 
-# 4A. 開牌紀錄輸入區
 st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
@@ -199,7 +194,6 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4B. 莊閒問路 (整合在歷史數據介面內，緊貼開牌區)
 st.markdown("##### 🔮 莊閒問路 (下局走向預測)")
 
 def build_logical_columns(history):
@@ -269,7 +263,6 @@ with col_ask_p:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4C. 專業娛樂城路紙 (五路全開)
 st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
 
 def layout_road_matrix(data_list, rows=6):
