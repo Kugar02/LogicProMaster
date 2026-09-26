@@ -79,7 +79,8 @@ def layout_road_matrix(data_list, rows=6):
 
 
 def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
-    html = f'<div style="display: grid; grid-template-columns: repeat({cols}, {cell_size}px); grid-template-rows: repeat({rows}, {cell_size}px); gap: 0; background: #fff; border: 1px solid #ccc; width: max-content;'>
+    # Use .format() to avoid f-string braces conflicts in HTML/CSS
+    html = '<div style="display: grid; grid-template-columns: repeat({}, {}px); grid-template-rows: repeat({}, {}px); gap: 0; background: #fff; border: 1px solid #ccc; width: max-content;">'.format(cols, cell_size, rows, cell_size)
     for r in range(rows):
         for c in range(cols):
             cell = grid.get((c, r), None)
@@ -87,27 +88,30 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
             if cell:
                 val = cell['val'] if isinstance(cell, dict) else cell
                 ties = cell.get('ties', 0) if isinstance(cell, dict) else 0
-                if val in ['B', 'Red']: color = "#e81123"
-                elif val in ['P', 'Blue']: color = "#0078d7"
-                else: color = "#2ca02c"
+                if val in ['B', 'Red']:
+                    color = "#e81123"
+                elif val in ['P', 'Blue']:
+                    color = "#0078d7"
+                else:
+                    color = "#2ca02c"
                 if road_type == "bead":
                     bg = "#e81123" if val == 'B' else "#0078d7" if val == 'P' else "#2ca02c"
                     txt = "莊" if val == 'B' else "閒" if val == 'P' else "和"
-                    content = f'<div style="width:20px;height:20px;background:{bg};color:white;border-radius:50%;font-size:10px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{txt}</div>'
+                    content = '<div style="width:20px;height:20px;background:{};color:white;border-radius:50%;font-size:10px;line-height:20px;text-align:center;margin:auto;font-weight:bold;">{}</div>'.format(bg, txt)
                 elif road_type == "big":
-                    content = f'<div style="position:relative;width:16px;height:16px;border:2px solid {color};border-radius:50%;margin:auto;'>
+                    content = '<div style="position:relative;width:16px;height:16px;border:2px solid {};border-radius:50%;margin:auto;">'.format(color)
                     if ties > 0:
-                        content += f'<div style="position:absolute;width:20px;height:2px;background:#2ca02c;transform:rotate(-45deg);top:7px;left:-4px;"></div>'
+                        content += '<div style="position:absolute;width:20px;height:2px;background:#2ca02c;transform:rotate(-45deg);top:7px;left:-4px;"></div>'
                     content += '</div>'
                 elif road_type == "big_eye":
-                    content = f'<div style="width:12px;height:12px;border:2px solid {color};border-radius:50%;margin:auto;"></div>'
+                    content = '<div style="width:12px;height:12px;border:2px solid {};border-radius:50%;margin:auto;"></div>'.format(color)
                 elif road_type == "small":
-                    content = f'<div style="width:12px;height:12px;background:{color};border-radius:50%;margin:auto;"></div>'
+                    content = '<div style="width:12px;height:12px;background:{};border-radius:50%;margin:auto;"></div>'.format(color)
                 elif road_type == "roach":
-                    content = f'<div style="width:16px;height:3px;background:{color};transform:rotate(-45deg);margin:auto;margin-top:8px;"></div>'
-            html += f'<div style="border: 1px solid #eee; display: flex; align-items: center; justify-content: center;">{content}</div>'
+                    content = '<div style="width:16px;height:3px;background:{};transform:rotate(-45deg);margin:auto;margin-top:8px;"></div>'.format(color)
+            html += '<div style="border: 1px solid #eee; display: flex; align-items: center; justify-content: center;">{}</div>'.format(content)
     html += '</div>'
-    return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
+    return '<div style="overflow-x: auto; padding-bottom: 10px;">{}</div>'.format(html)
 
 
 def get_ask_road_symbols(history, test_val):
@@ -163,7 +167,7 @@ if total_hands and run_monte_carlo_with_kelly:
             current_bet=st.session_state.base_unit
 
 m1,m2,m3,m4,m5=st.columns(5)
-m1.metric('💰 當前資產',f'${st.session_state.bankroll:.2f}');m2.metric('💵 建議注碼',f'${current_bet}');m3.metric('📜 總局數',f'{total_hands}');m4.metric('莊/閒',f'{b_count} / {p_count}');m5.metric('和局率',f'{tie_ratio}%')
+m1.metric('💰 當前資產',f'${st.session_state.bankroll:.2f}');m2.metric('💵 建議注碼',f'${current_bet}');m3.metric('📜 總局���',f'{total_hands}');m4.metric('莊/閒',f'{b_count} / {p_count}');m5.metric('和局率',f'{tie_ratio}%')
 st.markdown('---')
 
 # display weight box
