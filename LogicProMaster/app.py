@@ -7,18 +7,18 @@ try:
 except ImportError:
     run_monte_carlo_with_kelly = None
 
-# ================= 1. 頁面配置 =================
+# ================= 1. 頁面配置與高對比黑魂主題 CSS =================
 st.set_page_config(page_title="Quantum Baccarat 100K OS", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
-        .stButton>button { height: 45px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-        .ask-road-box { background: #1e1e1e; border-radius: 8px; padding: 15px; text-align: center; color: white; border: 1px solid #444;}
-        .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
-        .pattern-card { background: #262730; border: 1px solid #444; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
-        .weight-box { background: #111; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
+        .block-container { padding-top: 0.8rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
+        .stButton>button { height: 48px; font-size: 18px; font-weight: bold; border-radius: 8px; }
+        .ask-road-box { background: #16181f; border-radius: 8px; padding: 10px; text-align: center; color: white; border: 1px solid #2d313e;}
+        .ask-icons { display: flex; justify-content: center; gap: 15px; margin-top: 6px; }
+        .pattern-card { background: #1e2029; border: 1px solid #333644; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+        .weight-box { background: #0f1015; border: 2px solid #00ffcc; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,7 +68,6 @@ is_break_active = False
 consec_losses = 0
 final_b_pct, final_p_pct, actual_t_ratio = 45.8, 44.6, 9.5
 
-# 暫存策略選擇 (用於運算當前注碼)
 if 'strategy' not in st.session_state: st.session_state.strategy = "信號強弱 (1-2-3)"
 if 'base_unit' not in st.session_state: st.session_state.base_unit = 100
 
@@ -103,7 +102,7 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
         elif st.session_state.strategy == "不倒翁投注法":
             current_bet = st.session_state.base_unit * tumbler_unit
 
-# ================= 2. 資金管理、注碼策略與實時監控整合介面 =================
+# ================= 2. 資金管理與注碼策略整合面板 =================
 st.markdown("### ⚙️ 資金管理與注碼策略 (實時整合監控)")
 
 c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
@@ -116,7 +115,7 @@ if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True):
     st.session_state.ai_targets = []
     st.rerun()
 
-# 整合數據儀表板 (含當前注碼)
+# 整合數據儀表板
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("💰 當前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 m2.metric("💵 當前建議注碼", f"${current_bet}" if current_bet > 0 else "$0 (觀望)")
@@ -126,44 +125,10 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 
 st.markdown("---")
 
-# ================= 3. 輸入控制面板 =================
-st.markdown("### 🎛️ 開牌紀錄輸入")
-btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
-
-def record_hand(result):
-    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
-    st.session_state.history.append(result)
-    st.rerun()
-
-if btn_col1.button("🔴 開莊 (B)", use_container_width=True): record_hand('B')
-if btn_col2.button("🔵 開閒 (P)", use_container_width=True): record_hand('P')
-if btn_col3.button("🟢 開和 (T)", use_container_width=True): record_hand('T')
-if btn_col4.button("↩️ 撤銷上一手", use_container_width=True): 
-    if st.session_state.history: 
-        st.session_state.history.pop()
-        st.session_state.ai_targets.pop()
-    st.rerun()
-
-# 批量輸入
-with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
-    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
-    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
-        cleaned = []
-        for char in batch_input:
-            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
-            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
-            elif char in ['T', 't', '和']: cleaned.append('T')
-        if cleaned:
-            st.session_state.history.extend(cleaned)
-            st.session_state.ai_targets.extend([None] * len(cleaned))
-            st.rerun()
-
-# ================= 4. 五層流水線最終預測與核心診斷 =================
-st.markdown("---")
+# ================= 3. AI 預測建議與 4 大核心分析 =================
 st.markdown("### 🧠 最終權重預測建議 (五層流水線 Pipeline)")
 
 if total_hands > 0:
-    # 最終權重比重顯示盒
     st.markdown(f"""
     <div class="weight-box">
         <h2 style="margin:0; color:#00ffcc;">🎯 最終權重建議：{recommend}</h2>
@@ -180,7 +145,6 @@ if total_hands > 0:
     if is_break_active:
         st.error(f"🚨 **智能破路反打觸發**：連續 {consec_losses} 局正打爆路，四大路單權重已自動進行 Signal Inversion 反轉加權！")
 
-# 顯示 4 大核心路單（各別具備六大特徵強弱比對）獨立診斷儀表板
 if four_roads_data:
     st.markdown("#### 🔍 4 大核心路單獨立診斷 (各別跑滿六大特徵並取強者)")
     r_cols = st.columns(4)
@@ -197,7 +161,47 @@ if four_roads_data:
             </div>
             """, unsafe_allow_html=True)
 
-# ================= 5. 五路圖表與問路引擎 =================
+st.markdown("---")
+
+# ================= 4. 統合歷史數據介面 (開牌輸入 + 莊閒問路 + 專業路紙) =================
+st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
+
+# 4A. 開牌紀錄輸入區
+st.markdown("##### 🎛️ 開牌紀錄與快捷輸入")
+btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
+
+def record_hand(result):
+    st.session_state.ai_targets.append({'target': target, 'amount': current_bet} if target else None)
+    st.session_state.history.append(result)
+    st.rerun()
+
+if btn_col1.button("🔴 開莊 (B)", use_container_width=True): record_hand('B')
+if btn_col2.button("🔵 開閒 (P)", use_container_width=True): record_hand('P')
+if btn_col3.button("🟢 開和 (T)", use_container_width=True): record_hand('T')
+if btn_col4.button("↩️ 撤銷上一手", use_container_width=True): 
+    if st.session_state.history: 
+        st.session_state.history.pop()
+        st.session_state.ai_targets.pop()
+    st.rerun()
+
+with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
+    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
+    if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
+        cleaned = []
+        for char in batch_input:
+            if char in ['B', 'b', '莊', '庄']: cleaned.append('B')
+            elif char in ['P', 'p', '閒', '闲']: cleaned.append('P')
+            elif char in ['T', 't', '和']: cleaned.append('T')
+        if cleaned:
+            st.session_state.history.extend(cleaned)
+            st.session_state.ai_targets.extend([None] * len(cleaned))
+            st.rerun()
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# 4B. 莊閒問路 (整合在歷史數據介面內，緊貼開牌區)
+st.markdown("##### 🔮 莊閒問路 (下局走向預測)")
+
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
     for res in history:
@@ -223,6 +227,50 @@ def get_derived_road(cols, k):
                 elif len_ref == r: derived.append('Blue')
                 else: derived.append('Red')
     return derived
+
+def get_ask_road_symbols(history, test_val):
+    temp_hist = history + [test_val]
+    temp_cols = build_logical_columns(temp_hist)
+    e = get_derived_road(temp_cols, 1)
+    s = get_derived_road(temp_cols, 2)
+    r = get_derived_road(temp_cols, 3)
+    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
+
+ask_b = get_ask_road_symbols(st.session_state.history, 'B')
+ask_p = get_ask_road_symbols(st.session_state.history, 'P')
+
+def draw_ask_icon(val, r_type):
+    if not val: return "<div style='width:20px; height:20px;'></div>"
+    color = "#e81123" if val == 'Red' else "#0078d7"
+    if r_type == 'eye': return f"<div style='width:16px;height:16px;border:3px solid {color};border-radius:50%;'></div>"
+    if r_type == 'small': return f"<div style='width:16px;height:16px;background:{color};border-radius:50%;'></div>"
+    if r_type == 'roach': return f"<div style='width:16px;height:4px;background:{color};transform:rotate(-45deg);margin-top:6px;'></div>"
+
+col_ask_b, col_ask_p = st.columns(2)
+with col_ask_b:
+    st.markdown(f"""
+    <div class="ask-road-box">
+        <h5 style="color:#e81123; margin:0; padding-bottom: 3px;">🔴 莊問路 (Banker)</h5>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_b[0], 'eye')} {draw_ask_icon(ask_b[1], 'small')} {draw_ask_icon(ask_b[2], 'roach')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_ask_p:
+    st.markdown(f"""
+    <div class="ask-road-box">
+        <h5 style="color:#0078d7; margin:0; padding-bottom: 3px;">🔵 閒問路 (Player)</h5>
+        <div class="ask-icons">
+            {draw_ask_icon(ask_p[0], 'eye')} {draw_ask_icon(ask_p[1], 'small')} {draw_ask_icon(ask_p[2], 'roach')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# 4C. 專業娛樂城路紙 (五路全開)
+st.markdown("##### 📊 專業娛樂城路紙 (五路全開)")
 
 def layout_road_matrix(data_list, rows=6):
     grid, curr_col, curr_row, start_col, last_val = {}, 0, 0, 0, None
@@ -272,9 +320,6 @@ def render_css_grid(grid, rows=6, cols=30, cell_size=24, road_type="big"):
     html += '</div>'
     return f'<div style="overflow-x: auto; padding-bottom: 10px;">{html}</div>'
 
-st.markdown("---")
-st.markdown("### 📊 專業娛樂城路紙 (五路全開)")
-
 big_road_list = []
 for item in st.session_state.history:
     if item == 'T' and big_road_list: big_road_list[-1]['ties'] += 1
@@ -296,45 +341,3 @@ col_bot1, col_bot2, col_bot3 = st.columns(3)
 with col_bot1: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 1)), cols=24, cell_size=18, road_type="big_eye"), unsafe_allow_html=True)
 with col_bot2: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 2)), cols=24, cell_size=18, road_type="small"), unsafe_allow_html=True)
 with col_bot3: st.markdown(render_css_grid(layout_road_matrix(get_derived_road(logical_cols, 3)), cols=24, cell_size=18, road_type="roach"), unsafe_allow_html=True)
-
-# 莊閒問路
-def get_ask_road_symbols(history, test_val):
-    temp_hist = history + [test_val]
-    temp_cols = build_logical_columns(temp_hist)
-    e = get_derived_road(temp_cols, 1)
-    s = get_derived_road(temp_cols, 2)
-    r = get_derived_road(temp_cols, 3)
-    return (e[-1] if e else None, s[-1] if s else None, r[-1] if r else None)
-
-ask_b = get_ask_road_symbols(st.session_state.history, 'B')
-ask_p = get_ask_road_symbols(st.session_state.history, 'P')
-
-def draw_ask_icon(val, r_type):
-    if not val: return "<div style='width:20px; height:20px;'></div>"
-    color = "#e81123" if val == 'Red' else "#0078d7"
-    if r_type == 'eye': return f"<div style='width:16px;height:16px;border:3px solid {color};border-radius:50%;'></div>"
-    if r_type == 'small': return f"<div style='width:16px;height:16px;background:{color};border-radius:50%;'></div>"
-    if r_type == 'roach': return f"<div style='width:16px;height:4px;background:{color};transform:rotate(-45deg);margin-top:6px;'></div>"
-
-st.markdown("### 🔮 莊閒問路")
-col_ask_b, col_ask_p = st.columns(2)
-
-with col_ask_b:
-    st.markdown(f"""
-    <div class="ask-road-box">
-        <h4 style="color:#e81123; margin:0; padding-bottom: 5px;">🔴 莊問路 (Banker)</h4>
-        <div class="ask-icons">
-            {draw_ask_icon(ask_b[0], 'eye')} {draw_ask_icon(ask_b[1], 'small')} {draw_ask_icon(ask_b[2], 'roach')}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_ask_p:
-    st.markdown(f"""
-    <div class="ask-road-box">
-        <h4 style="color:#0078d7; margin:0; padding-bottom: 5px;">🔵 閒問路 (Player)</h4>
-        <div class="ask-icons">
-            {draw_ask_icon(ask_p[0], 'eye')} {draw_ask_icon(ask_p[1], 'small')} {draw_ask_icon(ask_p[2], 'roach')}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
