@@ -27,12 +27,13 @@ if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
 # ================= 2. 資金與策略控制台 =================
 st.markdown("### ⚙️ 資金管理與策略設定")
-c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1])
+c1, c2, c3, c4, c5 = st.columns([1.2, 1.2, 1.5, 1.5, 1])
 st.session_state.bankroll = c1.number_input("💰 初始總本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
-st.session_state.base_unit = c2.number_input("💵 基礎單位注碼 ($)", min_value=10, value=100, step=10)
-st.session_state.strategy = c3.selectbox("📈 選擇下注策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "馬丁格爾 (Martingale)"])
+st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=100, step=10)
+st.session_state.strategy = c3.selectbox("📈 選擇注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "馬丁格爾 (Martingale)"])
+st.session_state.break_mode = c4.selectbox("⚔️ 破路/反打機制", ["智能自動", "標準正打", "強制反打"])
 
-if c4.button("🗑️ 清空重置 (新靴)", use_container_width=True): 
+if c5.button("🗑️ 清空重置", use_container_width=True): 
     st.session_state.history = []
     st.session_state.ai_targets = []
     st.rerun()
@@ -76,7 +77,7 @@ if btn_col4.button("↩️ 撤銷上一手", use_container_width=True):
 
 # 批量輸入
 with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False):
-    batch_input = st.text_input("請輸入歷史賽果 (例如: 莊莊閒和莊 或 BBPTP)", placeholder="BBPTP...")
+    batch_input = st.text_input("請輸入歷史賽果 (例如: BBPTP...)", placeholder="BBPTP...")
     if st.button("📥 一鍵載入歷史紀錄", use_container_width=True):
         cleaned = []
         for char in batch_input:
@@ -88,9 +89,9 @@ with st.expander("📝 批量輸入已開牌局 (快速補單)", expanded=False)
             st.session_state.ai_targets.extend([None] * len(cleaned))
             st.rerun()
 
-# ================= 4. AI 決策與六大路型分析面板 =================
+# ================= 4. AI 決策與破路反打分析 =================
 st.markdown("---")
-st.markdown("### 🧠 100,000 次蒙地卡羅與六大路型加權分析")
+st.markdown("### 🧠 100,000 次蒙地卡羅與破路/反打機制分析")
 
 total_hands = len(st.session_state.history)
 b_count = st.session_state.history.count('B')
@@ -99,14 +100,17 @@ t_count = st.session_state.history.count('T')
 st.session_state.pending_target = None
 
 patterns_data = {}
+is_break_active = False
 
 if total_hands > 0 and run_monte_carlo_with_kelly:
-    with st.spinner("⚡ 正在執行 100,000 次殘牌矩陣模擬與六大路型分析..."):
-        avg_tc, b_prob, p_prob, t_prob, recommend, pattern_score, patterns_data = run_monte_carlo_with_kelly(
+    with st.spinner("⚡ 正在執行 100,000 次殘牌矩陣模擬與破路反打診斷..."):
+        avg_tc, b_prob, p_prob, t_prob, recommend, pattern_score, patterns_data, is_break_active = run_monte_carlo_with_kelly(
             b_count, p_count, t_count, 
             bankroll=st.session_state.bankroll, 
             sim_count=100000, 
-            history_list=st.session_state.history
+            history_list=st.session_state.history,
+            ai_targets=st.session_state.ai_targets,
+            break_mode=st.session_state.break_mode
         )
     
     target = 'B' if "莊" in recommend else 'P' if "閒" in recommend else None
@@ -126,7 +130,11 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
             bet_amount = st.session_state.base_unit * martingale_mult
 
         st.session_state.pending_target = {'target': target, 'amount': bet_amount}
-        st.success(f"🔥 **AI 最終決策：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 真實勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
+        
+        if is_break_active:
+            st.error(f"🚨 **破路反打信號觸發：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
+        else:
+            st.success(f"🔥 **AI 順路決策：買【{'莊' if target == 'B' else '閒'}】** ｜ 💵 策略注碼：**${bet_amount}** ｜ 勝率：莊 {b_prob:.1f}% vs 閒 {p_prob:.1f}%")
     else:
         st.warning(f"🛡️ **防禦信號：當前未產生明顯邊際優勢，建議觀望停注。** (綜合權重分: {pattern_score})")
 
@@ -137,15 +145,15 @@ sm2.metric("AI 策略勝率", f"{(wins/total_bets*100):.1f}%" if total_bets > 0 
 sm3.metric("策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 sm4.metric("目前總資產", f"${st.session_state.bankroll + pnl:.2f}")
 
-# 顯示六大路型特徵儀表板
+# 顯示六大路型與破路狀態儀表板
 if patterns_data:
-    st.markdown("#### 🔍 六大路型特徵動態診斷")
+    st.markdown("#### 🔍 特徵與破路反打機制診斷")
     p_cols = st.columns(3)
     p_keys = list(patterns_data.keys())
     for i, k in enumerate(p_keys):
         item = patterns_data[k]
         score_str = f"+{item['score']}" if item['score'] > 0 else f"{item['score']}"
-        color = "green" if item['score'] != 0 else "gray"
+        color = "red" if "破路" in item['name'] or "🚨" in item['status'] else ("green" if item['score'] != 0 else "gray")
         with p_cols[i % 3]:
             st.markdown(f"""
             <div class="pattern-card">
