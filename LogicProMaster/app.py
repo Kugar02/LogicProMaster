@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 
-# 載入五層整合大腦 (engine.py)
+# 載入極致動態大腦 (engine.py)
 try:
     from engine import run_monte_carlo_with_kelly
 except ImportError:
     run_monte_carlo_with_kelly = None
 
 # ================= 1. 頁面配置與高對比黑魂主題 CSS =================
-st.set_page_config(page_title="Quantum Baccarat 100K OS", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Quantum Baccarat Dynamic OS", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -35,7 +35,7 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'ai_targets' not in st.session_state: st.session_state.ai_targets = []
 if 'bankroll' not in st.session_state: st.session_state.bankroll = 10000
 
-# ================= 預先計算歷史統計與資金策略 (保持不變) =================
+# ================= 預先計算歷史統計與資金策略 =================
 fibo_idx = 0
 double_dragon_idx = 0
 tumbler_unit = 1  # 不倒翁: 1 -> 2 -> 3 循環
@@ -83,7 +83,7 @@ if total_hands > 0 and run_monte_carlo_with_kelly:
     avg_tc, final_b_pct, final_p_pct, actual_t_ratio, recommend, four_roads_data, is_break_active, consec_losses, markov_status, is_resonance = run_monte_carlo_with_kelly(
         b_count, p_count, t_count, 
         bankroll=st.session_state.bankroll, 
-        sim_count=100000, 
+        sim_count=0, 
         history_list=st.session_state.history,
         ai_targets=st.session_state.ai_targets
     )
@@ -136,7 +136,7 @@ m5.metric("📈 策略累計損益", f"${pnl:.2f}", delta=f"{pnl:.2f}")
 st.markdown("---")
 
 # ================= 3. AI 預測建議與動態分析面板 =================
-st.markdown("### 🧠 最終權重預測建議 (含三路共振 / 馬爾可夫鏈 / 4/9點殘牌修正)")
+st.markdown("### 🧠 最終權重預測建議 (三路共振 / 二階馬爾可夫 / 高熵防禦)")
 
 if total_hands > 0:
     resonance_tag = " 🔥【三路共振爆發點】" if is_resonance else ""
@@ -148,7 +148,7 @@ if total_hands > 0:
             <b>閒家歸一化權重：<span style="color:#1f77b4;">{final_p_pct}%</span></b>
         </p>
         <small style="color:#aaa;">
-            [{markov_status}] ｜ [殘牌修正] 關鍵點數 4/9點動態計算 ｜ 和率: {actual_t_ratio}%
+            [{markov_status}] ｜ [和局隱性修正] 當前和率: {actual_t_ratio}%
         </small>
     </div>
     """, unsafe_allow_html=True)
@@ -157,7 +157,7 @@ if total_hands > 0:
         st.error(f"🚨 **智能動態反打/避險啟動**：連續 {consec_losses} 局正打爆路，四大路單與馬爾可夫權重已自動進行動態平滑反轉！")
 
 if four_roads_data:
-    st.markdown("#### 🔍 4 大核心路單獨立診斷 (動態共振與五大特徵強弱)")
+    st.markdown("#### 🔍 4 大核心路單獨立診斷 (五大特徵強弱與三路共振)")
     r_cols = st.columns(4)
     r_keys = list(four_roads_data.keys())
     for i, k in enumerate(r_keys):
@@ -177,7 +177,6 @@ st.markdown("---")
 # ================= 4. 歷史數據控制介面 =================
 st.markdown("### 📜 歷史數據控制介面 (開牌紀錄 / 莊閒問路 / 五路圖表)")
 
-# --- 路單與問路算力工具函數 (定義在前，避免 NameError) ---
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
     for res in history:
