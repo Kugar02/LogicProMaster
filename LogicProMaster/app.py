@@ -52,6 +52,7 @@ def auto_window_alpha(history):
 def build_logical_columns(history):
     columns, current, last = [], [], None
     for result in history:
+        # T (和) should NOT start a new column nor be counted as a result
         if result == "T":
             continue
         if result != last:
@@ -179,22 +180,40 @@ fibo_idx = double_dragon_idx = 0
 tumbler_unit = 1
 total_bets = wins = losses = 0
 pnl = 0.0
-for target_record, actual in zip(st.session_state.ai_targets, history):
-    if target_record and target_record.get("target") and actual != "T":
-        total_bets += 1
-        amount = target_record.get("amount", 0)
-        if target_record["target"] == actual:
-            wins += 1
-            pnl += amount * 0.95 if actual == "B" else amount
-            fibo_idx = max(0, fibo_idx - 2)
-            double_dragon_idx = 0
-            tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1
-        else:
-            losses += 1
-            pnl -= amount
-            fibo_idx += 1
-            double_dragon_idx += 1
-            tumbler_unit = 1
+
+# Iterate over history by index to guarantee alignment with ai_targets
+for i, actual in enumerate(history):
+    # get corresponding target_record if exists, else None
+    ai_targets = st.session_state.ai_targets
+    target_record = ai_targets[i] if i < len(ai_targets) else None
+
+    # skip ties for betting stats
+    if actual == "T":
+        continue
+
+    # protect: skip invalid/non-dict/invalid-target entries
+    if not isinstance(target_record, dict) or target_record.get("target") not in ("B", "P"):
+        # invalid target -> skip counting this as a bet
+        continue
+
+    amount = target_record.get("amount", 0) or 0
+    if amount <= 0:
+        # invalid amount -> skip
+        continue
+
+    total_bets += 1
+    if target_record["target"] == actual:
+        wins += 1
+        pnl += amount * 0.95 if actual == "B" else amount
+        fibo_idx = max(0, fibo_idx - 2)
+        double_dragon_idx = 0
+        tumbler_unit = min(3, tumbler_unit + 1) if tumbler_unit < 3 else 1
+    else:
+        losses += 1
+        pnl -= amount
+        fibo_idx += 1
+        double_dragon_idx += 1
+        tumbler_unit = 1
 
 current_bet = 0
 target = None
@@ -236,7 +255,23 @@ if total_hands and run_monte_carlo_with_kelly:
          consecutive_losses, status, resonance, confidence) = result[:11]
         signal_level = "強訊號" if confidence >= 75 else "中訊號" if confidence >= 50 else "弱訊號"
 
-    target = "B" if "莊" in recommend else "P" if "閒" in recommend else None
+    # 修正 recommend 的方向判定：解析最後一個【...】內的文字
+    parsed_side = None
+    if isinstance(recommend, str):
+        try:
+            start = recommend.rfind("【")
+            end = recommend.rfind("】")
+            if start != -1 and end != -1 and end > start:
+                inside = recommend[start + 1:end]
+                if "莊" in inside:
+                    parsed_side = "B"
+                elif "閒" in inside:
+                    parsed_side = "P"
+        except Exception:
+            parsed_side = None
+
+    target = parsed_side
+
     if target:
         if st.session_state.strategy == "信號強弱 (1-2-3)":
             multiplier = {"強訊號": 2.0, "中訊號": 1.0, "弱訊號": 0.5}.get(signal_level, 1.0)
@@ -284,7 +319,19 @@ with right:
     buttons = st.columns(4)
 
     def record_hand(result):
-        st.session_state.ai_targets.append({"target": target, "amount": current_bet} if target else None)
+        # 保護：當 T (和) 時，僅紀錄 history 並在 ai_targets 對應位置放 None
+        if result == "T":
+            st.session_state.history.append(result)
+            st.session_state.ai_targets.append(None)
+            st.rerun()
+            return
+
+        # 當 B / P 時，如果 target 有效才紀錄 ai_targets，否則直接 append None
+        if target in ("B", "P") and current_bet > 0:
+            st.session_state.ai_targets.append({"target": target, "amount": current_bet})
+        else:
+            # 無效 target -> skip (append None) 保持位置對齊
+            st.session_state.ai_targets.append(None)
         st.session_state.history.append(result)
         st.rerun()
 
@@ -292,8 +339,10 @@ with right:
     if buttons[1].button("🔵 P", use_container_width=True): record_hand("P")
     if buttons[2].button("🟢 T", use_container_width=True): record_hand("T")
     if buttons[3].button("↩️ 撤銷", use_container_width=True):
+        # 安全地同步 pop 兩個 list
         if history:
             st.session_state.history.pop()
+        if st.session_state.ai_targets:
             st.session_state.ai_targets.pop()
         st.rerun()
     if st.button("🗑️ 清空重置（新靴）", use_container_width=True):
@@ -310,6 +359,7 @@ with right:
                 elif char in "Tt和": cleaned.append("T")
             if cleaned:
                 st.session_state.history.extend(cleaned)
+                # 批量匯入時無法知道每一局的 target，統一以 None 對齊
                 st.session_state.ai_targets.extend([None] * len(cleaned))
                 st.rerun()
 
