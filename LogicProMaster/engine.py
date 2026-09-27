@@ -64,6 +64,32 @@ def _feature(side, value, name, description=''):
     return {'feature': name, 'side': side, 'value': round(float(value), 2), 'description': description}
 
 
+# Helper: detect 排排連 (row-row-streak) in big-road columns derived from clean history
+def detect_row_row(clean_hist, min_cols=4, min_length=2):
+    """
+    Detect "排排連": consecutive columns at the tail where each column length >= min_length.
+    Returns (count, lengths_list) if found, else (0, []).
+    """
+    # build runs: consecutive identical results and their lengths (these correspond to big-road columns)
+    runs = []
+    for result in clean_hist:
+        if not runs or runs[-1][0] != result:
+            runs.append([result, 1])
+        else:
+            runs[-1][1] += 1
+
+    # scan from the end backwards to count consecutive columns with length >= min_length
+    lengths = []
+    for i in range(len(runs) - 1, -1, -1):
+        if runs[i][1] >= min_length:
+            lengths.insert(0, runs[i][1])  # keep forward order
+        else:
+            break
+    if len(lengths) >= min_cols:
+        return len(lengths), lengths
+    return 0, []
+
+
 def analyze_big_road_features(clean_hist, feature_weights=None):
     weights = {**DEFAULT_FEATURE_WEIGHTS, **(feature_weights or {})}
     b_score = p_score = 0.0
@@ -104,23 +130,15 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         if valid and clean_hist[-1] != clean_hist[-2]:
             add(clean_hist[-1], 18 * weights['jump_streak'], '逢跳連')
 
-    # 排排連：最近至少兩組相同長度的連續排列，視為獨立的連續結構特徵。
-    runs = []
-    for result in clean_hist:
-        if not runs or runs[-1][0] != result:
-            runs.append([result, 1])
-        else:
-            runs[-1][1] += 1
-    row_streak = 0
-    if len(runs) >= 3:
-        for i in range(len(runs) - 1, 0, -1):
-            if runs[i][1] == runs[i - 1][1]: row_streak += 1
-            else: break
-    if row_streak >= 2:
-        target = runs[-1][0]
-        add(target, (12 + row_streak * 4) * weights['row_row_streak'], f'排排連×{row_streak}')
+    # 原本的「排排連」曾加入 feature ranking，現在改成只偵測並加入 details（不影響分數與 ranking）
+    # 排排連 detection: 在大路 columns 中，尾端有 >=4 列，每列長度 >=2
+    row_count, row_lengths = detect_row_row(clean_hist, min_cols=4, min_length=2)
 
+    # 構造 details（由 features 產生），並在最後附加排排連描述（若存在）
     details = [f"{x['feature']}【{'莊' if x['side'] == 'B' else '閒'} {x['value']:+.1f}】" for x in features]
+    if row_count:
+        details.append(f"排排連: 發現連續 {row_count} 列，每列長度 {row_lengths}")
+
     return b_score, p_score, details, sorted(features, key=lambda x: abs(x['value']), reverse=True)
 
 
@@ -153,8 +171,18 @@ def analyze_derived_road_core(history, k, road_name):
         status = f'🔵 閒強 (閒{p_score:.0f} vs 莊{b_score:.0f})'
     else:
         dominant, net, status = 'Neutral', 0, '⚪ 導出訊號持平'
+
+    # details: 基本說明 + 馬爾可夫狀態（若有）
     details = [('整齊順路(追紅)' if wanted == 'Red' else '破路跳項(追藍)')]
-    if '樣本不足' not in mc_status: details.append(mc_status)
+    if '樣本不足' not in mc_status:
+        details.append(mc_status)
+
+    # 在每個核心分析也加入排排連偵測（但不當作 feature ranking）
+    clean = [x for x in history if x in ('B', 'P')]
+    row_count, row_lengths = detect_row_row(clean, min_cols=4, min_length=2)
+    if row_count:
+        details.append(f"排排連: 發現連續 {row_count} 列，每列長度 {row_lengths}")
+
     return {'name': road_name, 'dominant': dominant, 'net_score': net, 'status': status, 'details': details, 'feature_ranking': sorted(features, key=lambda x: abs(x['value']), reverse=True)}
 
 
@@ -207,7 +235,7 @@ def analyze_four_core_roads(history, window=50, alpha=0.2):
     if '樣本不足' not in mc_status: details.append(mc_status)
     big_net = b - p
     big_dom = 'B' if big_net > 0 else 'P' if big_net < 0 else 'Neutral'
-    roads = {'big_road': {'name': '1. 大路核心', 'dominant': big_dom, 'net_score': big_net, 'status': f"{'🔴 莊強' if big_dom == 'B' else '🔵 閒強' if big_dom == 'P' else '⚪ 持平'} (莊{b:.0f} vs 閒{p:.0f})", 'details': details, 'feature_ranking': ranking}}
+    roads = {'big_road': {'name': '1. 大路核心', 'dominant': big_dom, 'net_score': big_net, 'status': f"{'🔴 莊強' if big_dom == 'B' else '🔵 閒強' if big_dom == 'P' else '⚪ 持平'} ({big_net:.0f})", 'details': details, 'feature_ranking': ranking}}
     for k, key, label in ((1, 'big_eye', '大眼仔路'), (2, 'small_road', '小路核心'), (3, 'roach_road', '曱甴路核心')):
         roads[key] = analyze_derived_road_core(history, k, f'{k + 1}. {label}')
     valid = [r['dominant'] for r in roads.values() if r['dominant'] != 'Neutral']
