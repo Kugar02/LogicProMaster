@@ -162,6 +162,13 @@ def draw_ask_icon(value, kind):
     return '<div style="width:14px;height:3px;background:{};transform:rotate(-45deg);"></div>'.format(color)
 
 
+def summarize_question_road(road_series):
+    values = []
+    for items in road_series:
+        values.append(items[-1] if items else "-")
+    return " / ".join(values)
+
+
 history = st.session_state.history
 window, alpha = auto_window_alpha(history)
 b_count, p_count, t_count = history.count("B"), history.count("P"), history.count("T")
@@ -252,6 +259,26 @@ with left:
     st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=st.session_state.base_unit, step=10)
     st.session_state.strategy = c3.selectbox("📈 注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "雙頭龍", "不倒翁投注法"])
     st.info(f"策略：{st.session_state.strategy} ｜ 下一注：${current_bet} ｜ AI訊號：{signal_level}")
+
+    win_rate = wins / total_bets * 100 if total_bets else 0.0
+    st.markdown("#### 📋 最終權重及下注統計")
+    st.markdown(
+        f'<div class="weight-box"><h3>最終權重</h3><p><strong>莊 {final_b:.1f}%</strong> ｜ <strong>閒 {final_p:.1f}%</strong> ｜ 可信度 {confidence}% ｜ {signal_level}</p>'
+        f'<p>下注：{total_bets} 次 ｜ 勝 {wins} ｜ 負 {losses} ｜ 實際勝率 {win_rate:.1f}%</p>'
+        f'<p>本金：${st.session_state.bankroll:.2f} ｜ 策略損益：${pnl:.2f} ｜ 含本金資產：${st.session_state.bankroll + pnl:.2f}</p>'
+        f'<p>下一注：${current_bet}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+    if total_hands:
+        st.markdown("#### 🔮 下次統計")
+        st.markdown(
+            f'<div class="weight-box"><h3>{recommend}</h3><p>莊 {final_b:.1f}% ｜ 閒 {final_p:.1f}% ｜ 訊號：{signal_level}</p><small>{status}</small></div>',
+            unsafe_allow_html=True,
+        )
+        if is_break_active:
+            st.warning(f"反打機制生效：最近連敗 {consecutive_losses} 局。")
+
 with right:
     st.markdown("##### 🎛️ 開牌輸入")
     buttons = st.columns(4)
@@ -285,12 +312,6 @@ with right:
                 st.session_state.history.extend(cleaned)
                 st.session_state.ai_targets.extend([None] * len(cleaned))
                 st.rerun()
-
-st.markdown("#### 📋 最終權重及下注統計")
-win_rate = wins / total_bets * 100 if total_bets else 0.0
-st.write(f"最終權重：莊 {final_b:.1f}% ｜ 閒 {final_p:.1f}% ｜ 可信度 {confidence}% ｜ {signal_level}")
-st.write(f"下注：{total_bets} 次 ｜ 勝 {wins} ｜ 負 {losses} ｜ 實際勝率 {win_rate:.1f}%")
-st.write(f"本金：${st.session_state.bankroll:.2f} ｜ 策略損益：${pnl:.2f} ｜ 含本金資產：${st.session_state.bankroll + pnl:.2f}")
 
 if total_hands:
     st.markdown("### 🧠 最終權重預測建議")
@@ -333,8 +354,8 @@ for column, k, road_type in zip(st.columns(3), (1, 2, 3), ("big_eye", "small", "
 ask_b = [get_derived_road(build_logical_columns(history + ["B"]), k) for k in (1, 2, 3)]
 ask_p = [get_derived_road(build_logical_columns(history + ["P"]), k) for k in (1, 2, 3)]
 st.markdown("#### 問路")
-st.write("莊問路：" + " / ".join(x[-1] if x else "-") for x in ask_b)
-st.write("閒問路：" + " / ".join(x[-1] if x else "-") for x in ask_p)
+st.write("莊問路：" + summarize_question_road(ask_b))
+st.write("閒問路：" + summarize_question_road(ask_p))
 
 if total_hands and get_engine_diagnostics:
     with st.expander("📈 牌靴波動圖", expanded=False):
