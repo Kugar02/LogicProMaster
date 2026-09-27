@@ -23,6 +23,7 @@ st.markdown(
     .stButton>button { height: 46px; font-size: 16px; font-weight: bold; }
     .pattern-card { background:#1e2029; border:1px solid #333644; border-radius:8px; padding:12px; margin-bottom:8px; }
     .weight-box { background:#0f1015; border:2px solid #00ffcc; padding:15px; border-radius:10px; text-align:center; }
+    .detail-list { font-size:12px; color:#cfcfcf; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -34,6 +35,9 @@ for key, default in (
     ("bankroll", 10000),
     ("base_unit", 100),
     ("strategy", "信號強弱 (1-2-3)"),
+    ("kelly_enabled", False),
+    ("kelly_shrink", 0.5),
+    ("kelly_max_frac", 0.05),
 ):
     if key not in st.session_state:
         st.session_state[key] = default
@@ -272,6 +276,19 @@ if total_hands and run_monte_carlo_with_kelly:
 
     target = parsed_side
 
+    # if kelly enabled, compute suggested kelly bet
+    kelly_suggest = None
+    if target in ("B", "P") and st.session_state.kelly_enabled:
+        prob = (final_b / 100.0) if target == "B" else (final_p / 100.0)
+        # net odds b (profit per 1) : banker pays 0.95, player pays 1.0
+        b = 0.95 if target == "B" else 1.0
+        q = 1.0 - prob
+        raw_kelly = (b * prob - q) / b if b > 0 else 0
+        # apply shrink and cap
+        fraction = max(0.0, raw_kelly * st.session_state.kelly_shrink)
+        fraction = min(fraction, st.session_state.kelly_max_frac)
+        kelly_suggest = max(1, round(st.session_state.bankroll * fraction))
+
     if target:
         if st.session_state.strategy == "信號強弱 (1-2-3)":
             multiplier = {"強訊號": 2.0, "中訊號": 1.0, "弱訊號": 0.5}.get(signal_level, 1.0)
@@ -284,15 +301,26 @@ if total_hands and run_monte_carlo_with_kelly:
             current_bet = st.session_state.base_unit * sequence[min(double_dragon_idx, len(sequence) - 1)]
         else:
             current_bet = st.session_state.base_unit * tumbler_unit
+        # if kelly enabled and suggestion exists, override current_bet with kelly suggestion
+        if kelly_suggest:
+            current_bet = kelly_suggest
 
 # ================= 資金管理 + 輸入並列 =================
 st.markdown("### ⚙️ 資金管理與牌局輸入")
 left, right = st.columns([2, 1.25])
 with left:
-    c1, c2, c3 = st.columns([1.2, 1.2, 1.6])
+    c1, c2, c3 = st.columns([1.2, 1.2, 1.2])
     st.session_state.bankroll = c1.number_input("💰 本金 ($)", min_value=100, value=st.session_state.bankroll, step=500)
     st.session_state.base_unit = c2.number_input("💵 基礎注碼 ($)", min_value=10, value=st.session_state.base_unit, step=10)
     st.session_state.strategy = c3.selectbox("📈 注碼策略", ["信號強弱 (1-2-3)", "斐波那契 (Fibonacci)", "雙頭龍", "不倒翁投注法"])
+
+    # Kelly controls
+    k1, k2 = st.columns([1, 1])
+    st.session_state.kelly_enabled = k1.checkbox("自動 Kelly 注碼", value=st.session_state.kelly_enabled)
+    if st.session_state.kelly_enabled:
+        st.session_state.kelly_shrink = float(k2.slider("Kelly Shrink", 0.1, 1.0, float(st.session_state.kelly_shrink), 0.05))
+        st.session_state.kelly_max_frac = float(st.number_input("Kelly Max Fraction (of bankroll)", min_value=0.01, max_value=0.5, value=float(st.session_state.kelly_max_frac), step=0.01))
+
     st.info(f"策略：{st.session_state.strategy} ｜ 下一注：${current_bet} ｜ AI訊號：{signal_level}")
 
     win_rate = wins / total_bets * 100 if total_bets else 0.0
@@ -301,7 +329,7 @@ with left:
         f'<div class="weight-box"><h3>最終權重</h3><p><strong>莊 {final_b:.1f}%</strong> ｜ <strong>閒 {final_p:.1f}%</strong> ｜ 可信度 {confidence}% ｜ {signal_level}</p>'
         f'<p>下注：{total_bets} 次 ｜ 勝 {wins} ｜ 負 {losses} ｜ 實際勝率 {win_rate:.1f}%</p>'
         f'<p>本金：${st.session_state.bankroll:.2f} ｜ 策略損益：${pnl:.2f} ｜ 含本金資產：${st.session_state.bankroll + pnl:.2f}</p>'
-        f'<p>下一注：${current_bet}</p></div>',
+        f'<p>下一注：${current_bet} {"(Kelly 建議)" if kelly_suggest else ""}</p></div>',
         unsafe_allow_html=True,
     )
 
@@ -375,8 +403,9 @@ if roads:
     for column, item in zip(road_columns, roads.values()):
         ranking = item.get("feature_ranking", [])
         features = " ｜ ".join(f"{x['feature']} {x['value']:+.1f}" for x in ranking) or "沒有足夠特徵"
+        details = item.get("details", []) or []
         with column:
-            st.markdown(f'<div class="pattern-card"><b>{item.get("name", "核心")}</b><br>{item.get("status", "")}<br><small>{features}</small></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="pattern-card"><b>{item.get("name", "核心")}</b><br>{item.get("status", "")}<br><small>{features}</small><br><div class="detail-list">' + "<br>".join(details) + "</div></div>", unsafe_allow_html=True)
 
 st.markdown("### 📊 專業娛樂城路紙（五路全開）")
 big_road = []
@@ -404,8 +433,10 @@ for column, k, road_type in zip(st.columns(3), (1, 2, 3), ("big_eye", "small", "
 ask_b = [get_derived_road(build_logical_columns(history + ["B"]), k) for k in (1, 2, 3)]
 ask_p = [get_derived_road(build_logical_columns(history + ["P"]), k) for k in (1, 2, 3)]
 st.markdown("#### 問路")
-st.write("莊問路：" + summarize_question_road(ask_b))
-st.write("閒問路：" + summarize_question_road(ask_p))
+ask_b_s = " / ".join(x[-1] if x else "-" for x in ask_b)
+ask_p_s = " / ".join(x[-1] if x else "-" for x in ask_p)
+st.write("莊問路：" + ask_b_s)
+st.write("閒問路：" + ask_p_s)
 
 if total_hands and get_engine_diagnostics:
     with st.expander("📈 牌靴波動圖", expanded=False):
