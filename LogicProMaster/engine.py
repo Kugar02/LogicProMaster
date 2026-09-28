@@ -1,6 +1,8 @@
 # ==============================================================================
-# Quantum Baccarat High-Precision Engine (完全中性權重 + 全路單齊頭對齊 + 觀望避險防禦)
+# Quantum Baccarat High-Precision Engine (修復共振衝突 + 單向差值加分 + 熱加載接口)
 # ==============================================================================
+import json
+import os
 
 def build_logical_columns(history):
     cols, current_col, last_res = [], [], None
@@ -49,7 +51,7 @@ def analyze_markov_for_sequence(seq, seq_type="BP"):
     lbl_a = '莊' if seq_type == "BP" else '紅'
     lbl_b = '閒' if seq_type == "BP" else '藍'
     
-    # 1. 優先採用二階馬爾可夫 (前兩局組合)
+    # 1. 2階馬爾可夫
     last_two = (seq[-2], seq[-1])
     cnt_a2, cnt_b2 = 0, 0
     for i in range(n - 2):
@@ -67,7 +69,7 @@ def analyze_markov_for_sequence(seq, seq_type="BP"):
         status = f"馬爾可夫(2階/{tot2}局): 前【{last_two[0]},{last_two[1]}】➔ 偏【{'平' if favored=='Neutral' else (lbl_a if favored==val_a else lbl_b)}】"
         return net_score, favored, status
         
-    # 2. 樣本不足時回退至一階馬爾可夫
+    # 2. 1階馬爾可夫
     last_one = seq[-1]
     cnt_a1, cnt_b1 = 0, 0
     for i in range(n - 1):
@@ -100,7 +102,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
     if n < 3:
         return 0, 0, ["數據不足"]
 
-    # 特徵 1: 單跳規律 (B-P-B / P-B-P)
+    # 特徵 1: 單跳
     if n >= 3 and clean_hist[-1] != clean_hist[-2] and clean_hist[-2] != clean_hist[-3]:
         target = 'B' if clean_hist[-1] == 'P' else 'P'
         val = 18 * feature_weights.get('single', 1.0)
@@ -108,7 +110,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"單跳【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 2: 雙跳規律 (BB-PP-BB)
+    # 特徵 2: 雙跳
     if n >= 4 and clean_hist[-1] == clean_hist[-2] and clean_hist[-3] == clean_hist[-4] and clean_hist[-1] != clean_hist[-3]:
         target = 'B' if clean_hist[-1] == 'P' else 'P'
         val = 22 * feature_weights.get('double', 1.0)
@@ -116,7 +118,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"雙跳【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 3: 長龍動能 (3連或以上加權)
+    # 特徵 3: 長龍 (含衰減防護)
     streak = 1
     for i in range(n-2, -1, -1):
         if clean_hist[i] == clean_hist[-1]:
@@ -130,7 +132,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"長龍連{streak}【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 4: 房廳結構 (3x3 週期結構對稱)
+    # 特徵 4: 房廳結構
     if n >= 6 and clean_hist[-3:] == clean_hist[-6:-3] and len(set(clean_hist[-3:])) == 2:
         predict_next = clean_hist[-3]
         val = 20 * feature_weights.get('room', 1.0)
@@ -153,7 +155,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
             else: p_score += val
             details.append(f"逢跳連【{'莊' if next_target=='B' else '閒'}】")
 
-    # 特徵 6: 齊頭/拍頭對齊點 (Head Alignment - 大路)
+    # 特徵 6: 大路齊頭對齊
     cols = build_logical_columns(clean_hist)
     if len(cols) >= 3:
         c1, c2 = len(cols[-1]), len(cols[-2])
@@ -164,7 +166,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
             else: p_score += val
             details.append(f"齊頭對齊【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 7: 近期 6 手動能偏態 (Momentum Window)
+    # 特徵 7: 短線動能
     recent_6 = clean_hist[-6:]
     b_cnt6, p_cnt6 = recent_6.count('B'), recent_6.count('P')
     if abs(b_cnt6 - p_cnt6) >= 4:
@@ -176,7 +178,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
 
     return b_score, p_score, details
 
-# ================= 3. 下三路獨立推導 (含全路單齊頭對齊特徵) =================
+# ================= 3. 下三路獨立推導 (單向差值加分) =================
 def analyze_derived_road_core(history, k, road_name):
     cols = build_logical_columns(history)
     derived = get_derived_road(cols, k)
@@ -187,7 +189,6 @@ def analyze_derived_road_core(history, k, road_name):
     red_cnt = recent.count('Red')
     blue_cnt = recent.count('Blue')
     
-    # 前瞻模擬下一手開莊(B)或開閒(P)下三路變色情況
     cols_b = build_logical_columns(history + ['B'])
     derived_b = get_derived_road(cols_b, k)
     next_b_symbol = derived_b[-1] if derived_b else None
@@ -199,36 +200,46 @@ def analyze_derived_road_core(history, k, road_name):
     b_score, p_score = 0, 0
     details = []
     
-    # 1. 順路 / 破路
-    if red_cnt >= blue_cnt:
-        if next_b_symbol == 'Red': b_score += 15
-        if next_p_symbol == 'Red': p_score += 15
-        details.append("整齊順路(追紅)")
-    else:
-        if next_b_symbol == 'Blue': b_score += 15
-        if next_p_symbol == 'Blue': p_score += 15
-        details.append("破路跳項(追藍)")
+    # 🎯 單向加分判定 (避免雙加分抵消)
+    target_trend = 'Red' if red_cnt >= blue_cnt else 'Blue'
+    trend_label = "整齊順路(追紅)" if target_trend == 'Red' else "破路跳項(追藍)"
+    
+    if next_b_symbol == target_trend and next_p_symbol != target_trend:
+        b_score += 16
+        details.append(trend_label)
+    elif next_p_symbol == target_trend and next_b_symbol != target_trend:
+        p_score += 16
+        details.append(trend_label)
 
-    # 2. 🎯 下三路齊頭/拍頭對齊特徵 (Head Alignment in Derived Road)
+    # 下三路齊頭對齊 (單向加分)
     derived_cols = build_logical_columns(derived)
     if len(derived_cols) >= 3:
         dc1, dc2 = len(derived_cols[-1]), len(derived_cols[-2])
         if dc1 == dc2 and dc1 >= 2:
             target_color = 'Blue' if derived[-1] == 'Red' else 'Red'
-            if next_b_symbol == target_color: b_score += 14
-            if next_p_symbol == target_color: p_score += 14
-            details.append("齊頭對齊(轉色)")
+            if next_b_symbol == target_color and next_p_symbol != target_color:
+                b_score += 14
+                details.append("齊頭對齊(轉色)")
+            elif next_p_symbol == target_color and next_b_symbol != target_color:
+                p_score += 14
+                details.append("齊頭對齊(轉色)")
 
-    # 3. 馬爾可夫鏈預測
+    # 馬爾可夫鏈預測 (單向加分)
     mc_score, mc_favored, mc_status = analyze_markov_for_sequence(derived, seq_type="RedBlue")
     if mc_favored == 'Red':
-        if next_b_symbol == 'Red': b_score += 18
-        if next_p_symbol == 'Red': p_score += 18
-        details.append("馬爾可夫預測【紅】")
+        if next_b_symbol == 'Red' and next_p_symbol != 'Red':
+            b_score += 18
+            details.append("馬爾可夫預測【紅】")
+        elif next_p_symbol == 'Red' and next_b_symbol != 'Red':
+            p_score += 18
+            details.append("馬爾可夫預測【紅】")
     elif mc_favored == 'Blue':
-        if next_b_symbol == 'Blue': b_score += 18
-        if next_p_symbol == 'Blue': p_score += 18
-        details.append("馬爾可夫預測【藍】")
+        if next_b_symbol == 'Blue' and next_p_symbol != 'Blue':
+            b_score += 18
+            details.append("馬爾可夫預測【藍】")
+        elif next_p_symbol == 'Blue' and next_b_symbol != 'Blue':
+            p_score += 18
+            details.append("馬爾可夫預測【藍】")
         
     if b_score > p_score:
         dominant, net_score = 'B', -(b_score - p_score)
@@ -251,6 +262,17 @@ def compute_ai_online_learning(history_list):
     n = len(clean_hist)
     core_hits = {'big_road': 0, 'big_eye': 0, 'small_road': 0, 'roach_road': 0}
     core_totals = {'big_road': 0, 'big_eye': 0, 'small_road': 0, 'roach_road': 0}
+
+    # 嘗試從 Google Drive 備份檔熱加載最佳權重 (若無則使用預設)
+    base_weights = {'big_road': 0.40, 'big_eye': 0.20, 'small_road': 0.20, 'roach_road': 0.20}
+    if os.path.exists("drive_weights.json"):
+        try:
+            with open("drive_weights.json", "r") as f:
+                saved = json.load(f)
+                if 'base_weights' in saved:
+                    base_weights = saved['base_weights']
+        except Exception:
+            pass
 
     if n >= 6:
         valid_indices = [idx for idx, item in enumerate(history_list) if item in ['B', 'P']]
@@ -275,7 +297,6 @@ def compute_ai_online_learning(history_list):
                     if res['dominant'] == actual:
                         core_hits[key] += 1
 
-    base_weights = {'big_road': 0.40, 'big_eye': 0.20, 'small_road': 0.20, 'roach_road': 0.20}
     dynamic_core_weights = {}
     for key in base_weights:
         tot = core_totals[key]
@@ -327,7 +348,7 @@ def analyze_four_core_roads(history):
     big_pct_str = f"{dynamic_core_weights['big_road']*100:.0f}%"
     big_road_res = {'name': f'1. 大路核心 (AI動態:{big_pct_str})', 'dominant': dom_big, 'net_score': net_big, 'status': status_big, 'details': det_big}
 
-    # 2. 下三路核心分析 (大眼仔路、小路、曱甴路均已包含齊頭對齊診斷)
+    # 2. 下三路核心分析
     big_eye_pct = f"{dynamic_core_weights['big_eye']*100:.0f}%"
     big_eye_res = analyze_derived_road_core(history, k=1, road_name=f'2. 大眼仔路 (AI動態:{big_eye_pct})')
 
@@ -359,7 +380,8 @@ def analyze_four_core_roads(history):
     is_resonance = False
     if derived_dominants.count('B') == 3 or derived_dominants.count('P') == 3:
         is_resonance = True
-        weighted_score *= 1.5
+        # 🎯 動態三路共振加成 (確保分差足以打破觀望門檻)
+        weighted_score *= 2.2
         for key in ['big_eye', 'small_road', 'roach_road']:
             roads[key]['status'] += " (🔥三路極致共振)"
 
@@ -372,9 +394,8 @@ def analyze_four_core_roads(history):
 
     return roads, weighted_score, is_resonance, confidence_pct
 
-# ================= 6. 主引擎入口 (完全中性權重 + 觀望防禦) =================
+# ================= 6. 主引擎入口 =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
-    # 安全型態轉換與預設值防禦
     b_count = int(b_count) if b_count is not None else 0
     p_count = int(p_count) if p_count is not None else 0
     t_count = int(t_count) if t_count is not None else 0
@@ -383,10 +404,8 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     
     total_hands = b_count + p_count + t_count
 
-    # 四大路核心特徵推導
     four_roads, weighted_road_score, is_resonance, confidence_pct = analyze_four_core_roads(history_list)
 
-    # 計算連虧數
     consecutive_losses = 0
     if ai_targets and history_list:
         for tgt, actual in zip(reversed(ai_targets), reversed(history_list)):
@@ -397,36 +416,32 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
                 else:
                     break
 
-    # 🛡️ 多重防禦機制與反打過濾器
+    # 🛡️ 智能防禦鎖
     is_break_active = False
     if confidence_pct >= 68 or is_resonance:
-        # 強特徵 / 高自信度 / 下三路共振 ➔ 強制鎖定正打
         is_break_active = False
         final_score = weighted_road_score
     elif consecutive_losses >= 2 or confidence_pct < 40:
-        # 連虧2手或低自信度 ➔ 觸發防禦反打
         is_break_active = True
         final_score = -weighted_road_score * 0.8
     else:
         final_score = weighted_road_score
 
-    # 🎯 1. 採用 50:50 完全中性基準 (Zero-Bias Baseline)，公平反映莊閒圖形特徵
     BASE_B, BASE_P = 50.0, 50.0
 
-    # 牌靴宏觀偏態與路單權重修正
-    macro_skew = (p_count - b_count) * 0.12
-    road_weight_bias = (final_score / 100.0) * 20.0
+    # 修正：牌靴偏態向均值回歸微調
+    macro_skew = (b_count - p_count) * 0.10
+    road_weight_bias = (final_score / 100.0) * 22.0
 
-    l2_b = BASE_B - road_weight_bias - macro_skew
-    l2_p = BASE_P + road_weight_bias + macro_skew
+    l2_b = BASE_B - road_weight_bias + macro_skew
+    l2_p = BASE_P + road_weight_bias - macro_skew
 
     actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else 9.52
-    tie_implicit_bias = (actual_t_ratio - 9.52) * 0.12
+    tie_implicit_bias = (actual_t_ratio - 9.52) * 0.10
 
     post_b = l2_b - tie_implicit_bias
     post_p = l2_p + tie_implicit_bias
 
-    # 🎯 2. 僅在四路特徵完全無訊號 (final_score == 0) 且無宏觀偏態時，微幅給予莊家 +0.5% 平局 Tie-Breaker
     if final_score == 0 and macro_skew == 0:
         post_b += 0.5
 
@@ -434,16 +449,22 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     final_b_pct = round((post_b / total_weight) * 100, 1)
     final_p_pct = round((post_p / total_weight) * 100, 1)
 
-    # 🎯 3. 高勝率「觀望/下注」決策樹 (Pass Mechanism)
+    # 🎯 決策邏輯：解決「三路共振」與「觀望避險」矛盾
     margin_diff = abs(final_b_pct - final_p_pct)
-    if confidence_pct < 55 or margin_diff < 2.0:
+    
+    if is_resonance:
+        # 強制極致共振出擊，絕不誤判為觀望
+        if final_b_pct >= final_p_pct:
+            recommend = "🔥 三路共振極致出擊【莊】"
+        else:
+            recommend = "🔥 三路共振極致出擊【閒】"
+    elif confidence_pct < 52 or margin_diff < 1.8:
         recommend = "⏸️ 訊號混亂 (建議觀望避險)"
     elif final_b_pct >= final_p_pct:
         recommend = "⚔️ 智能反打【莊】" if is_break_active else "🔥 強勢正打【莊】"
     else:
         recommend = "⚔️ 智能反打【閒】" if is_break_active else "🔥 強勢正打【閒】"
 
-    status_msg = f"[高精準純特徵引擎啟用] 完全中性基準 ｜ 牌靴偏態: {macro_skew:+.1f}%"
+    status_msg = f"[高精準純特徵引擎] 完全中性基準 ｜ 牌靴偏態: {macro_skew:+.1f}%"
     
-    # 保持 11 個傳出參數，保證 app.py 零縫隙相容
     return 0.0, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses, status_msg, is_resonance, confidence_pct
