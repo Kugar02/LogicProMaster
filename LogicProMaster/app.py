@@ -28,60 +28,93 @@ if 'target_profit' not in st.session_state:
 st.title("🎲 Quantum Baccarat Dynamic OS")
 
 # ==============================================================================
-# 2. 完整資金管理與策略控制面板
+# 2. 資金管理與策略控制面板 (位於開牌紀錄上方)
 # ==============================================================================
-st.sidebar.header("⚙️ 資金管理與策略控制")
-st.session_state.bankroll = st.sidebar.number_input("💰 當前總資金 ($)", value=float(st.session_state.bankroll), step=100.0)
+st.subheader("⚙️ 資金管理與策略控制")
 
-# 多樣化注碼策略選擇
-st.session_state.bet_strategy = st.sidebar.selectbox(
-    "🎰 資金管理策略",
-    [
-        "半凱利 (Half-Kelly Dynamic)",
-        "固定平注 (Flat Betting)",
-        "馬丁格爾倍投 (Martingale)",
-        "勝進直纜 (1-2-4-8)",
-        "自訂固定百分比 (Fixed %)"
-    ],
-    index=0
-)
+col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
 
-st.session_state.base_unit = st.sidebar.number_input("💵 基礎注碼/每注基碼 ($)", value=float(st.session_state.base_unit), step=50.0)
-st.session_state.stop_loss = st.sidebar.number_input("🛑 止損門檻 ($)", value=float(st.session_state.stop_loss), step=500.0)
-st.session_state.target_profit = st.sidebar.number_input("🎯 止盈目標 ($)", value=float(st.session_state.target_profit), step=500.0)
+with col_s1:
+    st.session_state.bankroll = st.number_input(
+        "💰 當前總資金 ($)", 
+        value=float(st.session_state.bankroll), 
+        step=100.0, 
+        key="input_bankroll"
+    )
 
-# 顯示累計盈虧與風控提醒
-profit = st.session_state.total_profit
-profit_color = "green" if profit >= 0 else "red"
-st.sidebar.markdown(f"**當前累計盈虧：** <span style='color:{profit_color};font-size:18px;font-weight:bold;'>${profit:+.2f}</span>", unsafe_allow_html=True)
+with col_s2:
+    st.session_state.bet_strategy = st.selectbox(
+        "🎰 資金管理策略",
+        [
+            "半凱利 (Half-Kelly Dynamic)",
+            "固定平注 (Flat Betting)",
+            "馬丁格爾倍投 (Martingale)",
+            "勝進直纜 (1-2-4-8)",
+            "自訂固定百分比 (Fixed %)"
+        ],
+        index=0,
+        key="input_strat"
+    )
 
-if profit <= -st.session_state.stop_loss:
-    st.sidebar.error("🚨 警告：已觸發止損門檻，建議停止下注離場避險！")
-elif profit >= st.session_state.target_profit:
-    st.sidebar.success("🎉 恭喜：已達到止盈目標，建議獲利結算！")
+with col_s3:
+    st.session_state.base_unit = st.number_input(
+        "💵 基礎注碼/每注基碼 ($)", 
+        value=float(st.session_state.base_unit), 
+        step=50.0, 
+        key="input_base_unit"
+    )
 
-if st.sidebar.button("🔄 重置資金與盈虧", use_container_width=True):
-    st.session_state.total_profit = 0.0
-    st.rerun()
+with col_s4:
+    st.session_state.stop_loss = st.number_input(
+        "🛑 止損門檻 ($)", 
+        value=float(st.session_state.stop_loss), 
+        step=500.0, 
+        key="input_stop_loss"
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📁 Google Drive 數據備份")
+with col_s5:
+    st.session_state.target_profit = st.number_input(
+        "🎯 止盈目標 ($)", 
+        value=float(st.session_state.target_profit), 
+        step=500.0, 
+        key="input_target_profit"
+    )
 
-if st.sidebar.button("📦 一鍵備份當前牌靴至 KUGAR", use_container_width=True):
-    with st.spinner("正在備份至 Google Drive KUGAR 資料夾..."):
-        success, result = upload_shoe_to_kugar(
-            shoe_history=st.session_state.history_list,
-            session_stats={
-                "bankroll": st.session_state.bankroll,
-                "total_profit": st.session_state.total_profit,
-                "strategy": st.session_state.bet_strategy
-            }
-        )
-        if success:
-            st.sidebar.success("✅ 牌靴已成功保存至 KUGAR！")
-            st.sidebar.markdown(f"[🔗 在 Google Drive 查看檔案]({result})")
-        else:
-            st.sidebar.error(result)
+# 顯示資金狀態、風控門檻提醒與控制按鈕
+col_p1, col_p2, col_p3 = st.columns([2, 1.5, 1.5])
+
+with col_p1:
+    profit = st.session_state.total_profit
+    profit_color = "green" if profit >= 0 else "red"
+    st.markdown(f"**當前累計盈虧：** <span style='color:{profit_color};font-size:18px;font-weight:bold;'>${profit:+.2f}</span>", unsafe_allow_html=True)
+    if profit <= -st.session_state.stop_loss and st.session_state.stop_loss > 0:
+        st.error("🚨 警告：已觸發止損門檻，建議停止下注離場避險！")
+    elif profit >= st.session_state.target_profit and st.session_state.target_profit > 0:
+        st.success("🎉 恭喜：已達到止盈目標，建議獲利結算！")
+
+with col_p2:
+    if st.button("🔄 重置資金與盈虧", use_container_width=True):
+        st.session_state.total_profit = 0.0
+        st.rerun()
+
+with col_p3:
+    if st.button("📦 備份當前牌靴至 KUGAR", use_container_width=True):
+        with st.spinner("正在上傳至 Google Drive..."):
+            success, result = upload_shoe_to_kugar(
+                shoe_history=st.session_state.history_list,
+                session_stats={
+                    "bankroll": st.session_state.bankroll,
+                    "total_profit": st.session_state.total_profit,
+                    "strategy": st.session_state.bet_strategy
+                }
+            )
+            if success:
+                st.success("✅ 保存成功！")
+                st.markdown(f"[🔗 在 Drive 查看檔案]({result})")
+            else:
+                st.error(result)
+
+st.markdown("---")
 
 # ==============================================================================
 # 3. 開牌紀錄與快捷輸入介面
@@ -143,7 +176,7 @@ if total_hands > 0:
     st.markdown("---")
     st.header(f"🎯 最終權重建議：{recommend}")
     
-    # ------------------ 注碼策略動態計算 ------------------
+    # ------------------ 注碼策略動態換算 ------------------
     win_p = max(final_b_pct, final_p_pct) / 100.0
     edge = (win_p - (1 - win_p))
     
@@ -277,7 +310,6 @@ if total_hands > 0:
         if not derived:
             st.info(f"{road_name}尚未開出 (需大路達到足夠欄位)")
             return
-        
         d_cols = build_derived_columns(derived)
         disp = d_cols[-20:]
         if disp:
