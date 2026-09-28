@@ -3,10 +3,11 @@ import json
 from datetime import datetime
 import streamlit as st
 
-# 將剛才複製的 Apps Script Web app URL 放在 Secrets 或直接貼在這裡
-GAS_WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", "貼上你複製的_WEB_APP_URL")
-
 def upload_shoe_to_kugar(shoe_history, session_stats=None, shoe_id=None):
+    gas_url = st.secrets.get("WEBHOOK_URL")
+    if not gas_url:
+        return False, "Streamlit Secrets 中未設定 WEBHOOK_URL！"
+
     if not shoe_history:
         return False, "牌靴數據為空，未執行備份。"
 
@@ -29,7 +30,7 @@ def upload_shoe_to_kugar(shoe_history, session_stats=None, shoe_id=None):
 
     try:
         response = requests.post(
-            GAS_WEBHOOK_URL,
+            gas_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
             timeout=15
