@@ -1,5 +1,5 @@
 # ==============================================================================
-# Quantum Baccarat High-Precision Engine (修復共振衝突 + 單向差值加分 + 熱加載接口)
+# Quantum Baccarat High-Precision Engine (完全中性權重 + 全路單齊頭對齊 + 觀望避險防禦)
 # ==============================================================================
 import json
 import os
@@ -51,7 +51,7 @@ def analyze_markov_for_sequence(seq, seq_type="BP"):
     lbl_a = '莊' if seq_type == "BP" else '紅'
     lbl_b = '閒' if seq_type == "BP" else '藍'
     
-    # 1. 2階馬爾可夫
+    # 2階馬爾可夫
     last_two = (seq[-2], seq[-1])
     cnt_a2, cnt_b2 = 0, 0
     for i in range(n - 2):
@@ -69,7 +69,7 @@ def analyze_markov_for_sequence(seq, seq_type="BP"):
         status = f"馬爾可夫(2階/{tot2}局): 前【{last_two[0]},{last_two[1]}】➔ 偏【{'平' if favored=='Neutral' else (lbl_a if favored==val_a else lbl_b)}】"
         return net_score, favored, status
         
-    # 2. 1階馬爾可夫
+    # 1階馬爾可夫
     last_one = seq[-1]
     cnt_a1, cnt_b1 = 0, 0
     for i in range(n - 1):
@@ -102,7 +102,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
     if n < 3:
         return 0, 0, ["數據不足"]
 
-    # 特徵 1: 單跳
+    # 1. 單跳
     if n >= 3 and clean_hist[-1] != clean_hist[-2] and clean_hist[-2] != clean_hist[-3]:
         target = 'B' if clean_hist[-1] == 'P' else 'P'
         val = 18 * feature_weights.get('single', 1.0)
@@ -110,7 +110,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"單跳【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 2: 雙跳
+    # 2. 雙跳
     if n >= 4 and clean_hist[-1] == clean_hist[-2] and clean_hist[-3] == clean_hist[-4] and clean_hist[-1] != clean_hist[-3]:
         target = 'B' if clean_hist[-1] == 'P' else 'P'
         val = 22 * feature_weights.get('double', 1.0)
@@ -118,7 +118,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"雙跳【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 3: 長龍 (含衰減防護)
+    # 3. 長龍
     streak = 1
     for i in range(n-2, -1, -1):
         if clean_hist[i] == clean_hist[-1]:
@@ -132,7 +132,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"長龍連{streak}【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 4: 房廳結構
+    # 4. 房廳結構
     if n >= 6 and clean_hist[-3:] == clean_hist[-6:-3] and len(set(clean_hist[-3:])) == 2:
         predict_next = clean_hist[-3]
         val = 20 * feature_weights.get('room', 1.0)
@@ -140,7 +140,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
         else: p_score += val
         details.append(f"房廳週期【{'莊' if predict_next=='B' else '閒'}】")
 
-    # 特徵 5: 逢跳連
+    # 5. 逢跳連
     if n >= 5:
         jumps_then_streak = True
         for i in range(2, n-1):
@@ -155,7 +155,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
             else: p_score += val
             details.append(f"逢跳連【{'莊' if next_target=='B' else '閒'}】")
 
-    # 特徵 6: 大路齊頭對齊
+    # 6. 大路齊頭對齊
     cols = build_logical_columns(clean_hist)
     if len(cols) >= 3:
         c1, c2 = len(cols[-1]), len(cols[-2])
@@ -166,7 +166,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
             else: p_score += val
             details.append(f"齊頭對齊【{'莊' if target=='B' else '閒'}】")
 
-    # 特徵 7: 短線動能
+    # 7. 短線動能
     recent_6 = clean_hist[-6:]
     b_cnt6, p_cnt6 = recent_6.count('B'), recent_6.count('P')
     if abs(b_cnt6 - p_cnt6) >= 4:
@@ -200,7 +200,7 @@ def analyze_derived_road_core(history, k, road_name):
     b_score, p_score = 0, 0
     details = []
     
-    # 🎯 單向加分判定 (避免雙加分抵消)
+    # 單向加分判定
     target_trend = 'Red' if red_cnt >= blue_cnt else 'Blue'
     trend_label = "整齊順路(追紅)" if target_trend == 'Red' else "破路跳項(追藍)"
     
@@ -211,7 +211,7 @@ def analyze_derived_road_core(history, k, road_name):
         p_score += 16
         details.append(trend_label)
 
-    # 下三路齊頭對齊 (單向加分)
+    # 下三路齊頭對齊
     derived_cols = build_logical_columns(derived)
     if len(derived_cols) >= 3:
         dc1, dc2 = len(derived_cols[-1]), len(derived_cols[-2])
@@ -224,7 +224,7 @@ def analyze_derived_road_core(history, k, road_name):
                 p_score += 14
                 details.append("齊頭對齊(轉色)")
 
-    # 馬爾可夫鏈預測 (單向加分)
+    # 馬爾可夫鏈預測
     mc_score, mc_favored, mc_status = analyze_markov_for_sequence(derived, seq_type="RedBlue")
     if mc_favored == 'Red':
         if next_b_symbol == 'Red' and next_p_symbol != 'Red':
@@ -263,7 +263,6 @@ def compute_ai_online_learning(history_list):
     core_hits = {'big_road': 0, 'big_eye': 0, 'small_road': 0, 'roach_road': 0}
     core_totals = {'big_road': 0, 'big_eye': 0, 'small_road': 0, 'roach_road': 0}
 
-    # 嘗試從 Google Drive 備份檔熱加載最佳權重 (若無則使用預設)
     base_weights = {'big_road': 0.40, 'big_eye': 0.20, 'small_road': 0.20, 'roach_road': 0.20}
     if os.path.exists("drive_weights.json"):
         try:
@@ -325,7 +324,6 @@ def analyze_four_core_roads(history):
 
     dynamic_core_weights, feature_weights = compute_ai_online_learning(history)
 
-    # 1. 大路核心分析
     b_score_big, p_score_big, det_big = analyze_big_road_features(clean_hist, feature_weights)
     big_mc_score, big_mc_fav, big_mc_status = analyze_markov_for_sequence(clean_hist, seq_type="BP")
 
@@ -348,7 +346,6 @@ def analyze_four_core_roads(history):
     big_pct_str = f"{dynamic_core_weights['big_road']*100:.0f}%"
     big_road_res = {'name': f'1. 大路核心 (AI動態:{big_pct_str})', 'dominant': dom_big, 'net_score': net_big, 'status': status_big, 'details': det_big}
 
-    # 2. 下三路核心分析
     big_eye_pct = f"{dynamic_core_weights['big_eye']*100:.0f}%"
     big_eye_res = analyze_derived_road_core(history, k=1, road_name=f'2. 大眼仔路 (AI動態:{big_eye_pct})')
 
@@ -380,7 +377,6 @@ def analyze_four_core_roads(history):
     is_resonance = False
     if derived_dominants.count('B') == 3 or derived_dominants.count('P') == 3:
         is_resonance = True
-        # 🎯 動態三路共振加成 (確保分差足以打破觀望門檻)
         weighted_score *= 2.2
         for key in ['big_eye', 'small_road', 'roach_road']:
             roads[key]['status'] += " (🔥三路極致共振)"
@@ -394,7 +390,7 @@ def analyze_four_core_roads(history):
 
     return roads, weighted_score, is_resonance, confidence_pct
 
-# ================= 6. 主引擎入口 =================
+# ================= 6. 主引擎入口 (嚴格返回 11 個參數) =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     b_count = int(b_count) if b_count is not None else 0
     p_count = int(p_count) if p_count is not None else 0
@@ -416,7 +412,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
                 else:
                     break
 
-    # 🛡️ 智能防禦鎖
     is_break_active = False
     if confidence_pct >= 68 or is_resonance:
         is_break_active = False
@@ -429,7 +424,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
 
     BASE_B, BASE_P = 50.0, 50.0
 
-    # 修正：牌靴偏態向均值回歸微調
     macro_skew = (b_count - p_count) * 0.10
     road_weight_bias = (final_score / 100.0) * 22.0
 
@@ -449,11 +443,9 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     final_b_pct = round((post_b / total_weight) * 100, 1)
     final_p_pct = round((post_p / total_weight) * 100, 1)
 
-    # 🎯 決策邏輯：解決「三路共振」與「觀望避險」矛盾
     margin_diff = abs(final_b_pct - final_p_pct)
     
     if is_resonance:
-        # 強制極致共振出擊，絕不誤判為觀望
         if final_b_pct >= final_p_pct:
             recommend = "🔥 三路共振極致出擊【莊】"
         else:
