@@ -1,5 +1,5 @@
 # ==============================================================================
-# Quantum Baccarat High-Precision Engine (純特徵矩陣 + 多階馬爾可夫 + 觀望避險防禦)
+# Quantum Baccarat High-Precision Engine (完全中性權重 + 全路單齊頭對齊 + 觀望避險防禦)
 # ==============================================================================
 
 def build_logical_columns(history):
@@ -153,7 +153,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
             else: p_score += val
             details.append(f"逢跳連【{'莊' if next_target=='B' else '閒'}】")
 
-    # 特徵 6: 齊頭/拍頭對齊點 (Head Alignment)
+    # 特徵 6: 齊頭/拍頭對齊點 (Head Alignment - 大路)
     cols = build_logical_columns(clean_hist)
     if len(cols) >= 3:
         c1, c2 = len(cols[-1]), len(cols[-2])
@@ -176,7 +176,7 @@ def analyze_big_road_features(clean_hist, feature_weights=None):
 
     return b_score, p_score, details
 
-# ================= 3. 下三路獨立推導與紅藍前瞻 =================
+# ================= 3. 下三路獨立推導 (含全路單齊頭對齊特徵) =================
 def analyze_derived_road_core(history, k, road_name):
     cols = build_logical_columns(history)
     derived = get_derived_road(cols, k)
@@ -199,6 +199,7 @@ def analyze_derived_road_core(history, k, road_name):
     b_score, p_score = 0, 0
     details = []
     
+    # 1. 順路 / 破路
     if red_cnt >= blue_cnt:
         if next_b_symbol == 'Red': b_score += 15
         if next_p_symbol == 'Red': p_score += 15
@@ -207,7 +208,18 @@ def analyze_derived_road_core(history, k, road_name):
         if next_b_symbol == 'Blue': b_score += 15
         if next_p_symbol == 'Blue': p_score += 15
         details.append("破路跳項(追藍)")
-        
+
+    # 2. 🎯 下三路齊頭/拍頭對齊特徵 (Head Alignment in Derived Road)
+    derived_cols = build_logical_columns(derived)
+    if len(derived_cols) >= 3:
+        dc1, dc2 = len(derived_cols[-1]), len(derived_cols[-2])
+        if dc1 == dc2 and dc1 >= 2:
+            target_color = 'Blue' if derived[-1] == 'Red' else 'Red'
+            if next_b_symbol == target_color: b_score += 14
+            if next_p_symbol == target_color: p_score += 14
+            details.append("齊頭對齊(轉色)")
+
+    # 3. 馬爾可夫鏈預測
     mc_score, mc_favored, mc_status = analyze_markov_for_sequence(derived, seq_type="RedBlue")
     if mc_favored == 'Red':
         if next_b_symbol == 'Red': b_score += 18
@@ -315,7 +327,7 @@ def analyze_four_core_roads(history):
     big_pct_str = f"{dynamic_core_weights['big_road']*100:.0f}%"
     big_road_res = {'name': f'1. 大路核心 (AI動態:{big_pct_str})', 'dominant': dom_big, 'net_score': net_big, 'status': status_big, 'details': det_big}
 
-    # 2. 下三路核心分析
+    # 2. 下三路核心分析 (大眼仔路、小路、曱甴路均已包含齊頭對齊診斷)
     big_eye_pct = f"{dynamic_core_weights['big_eye']*100:.0f}%"
     big_eye_res = analyze_derived_road_core(history, k=1, road_name=f'2. 大眼仔路 (AI動態:{big_eye_pct})')
 
@@ -360,7 +372,7 @@ def analyze_four_core_roads(history):
 
     return roads, weighted_score, is_resonance, confidence_pct
 
-# ================= 6. 主引擎入口 (相容性升級：無蒙地卡羅，極致純概率與觀望防禦) =================
+# ================= 6. 主引擎入口 (完全中性權重 + 觀望防禦) =================
 def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_count=100000, history_list=None, ai_targets=None):
     # 安全型態轉換與預設值防禦
     b_count = int(b_count) if b_count is not None else 0
@@ -370,7 +382,6 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     ai_targets = list(ai_targets) if ai_targets is not None else []
     
     total_hands = b_count + p_count + t_count
-    NATURAL_B, NATURAL_P, NATURAL_T = 45.86, 44.62, 9.52
 
     # 四大路核心特徵推導
     four_roads, weighted_road_score, is_resonance, confidence_pct = analyze_four_core_roads(history_list)
@@ -399,24 +410,31 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     else:
         final_score = weighted_road_score
 
+    # 🎯 1. 採用 50:50 完全中性基準 (Zero-Bias Baseline)，公平反映莊閒圖形特徵
+    BASE_B, BASE_P = 50.0, 50.0
+
     # 牌靴宏觀偏態與路單權重修正
     macro_skew = (p_count - b_count) * 0.12
-    road_weight_bias = (final_score / 100.0) * 18.0
+    road_weight_bias = (final_score / 100.0) * 20.0
 
-    l2_b = NATURAL_B - road_weight_bias - macro_skew
-    l2_p = NATURAL_P + road_weight_bias + macro_skew
+    l2_b = BASE_B - road_weight_bias - macro_skew
+    l2_p = BASE_P + road_weight_bias + macro_skew
 
-    actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else NATURAL_T
-    tie_implicit_bias = (actual_t_ratio - NATURAL_T) * 0.12
+    actual_t_ratio = (t_count / total_hands * 100) if total_hands > 0 else 9.52
+    tie_implicit_bias = (actual_t_ratio - 9.52) * 0.12
 
     post_b = l2_b - tie_implicit_bias
     post_p = l2_p + tie_implicit_bias
+
+    # 🎯 2. 僅在四路特徵完全無訊號 (final_score == 0) 且無宏觀偏態時，微幅給予莊家 +0.5% 平局 Tie-Breaker
+    if final_score == 0 and macro_skew == 0:
+        post_b += 0.5
 
     total_weight = max(0.001, post_b + post_p)
     final_b_pct = round((post_b / total_weight) * 100, 1)
     final_p_pct = round((post_p / total_weight) * 100, 1)
 
-    # 🎯 高勝率「觀望/下注」決策樹 (Pass Mechanism)
+    # 🎯 3. 高勝率「觀望/下注」決策樹 (Pass Mechanism)
     margin_diff = abs(final_b_pct - final_p_pct)
     if confidence_pct < 55 or margin_diff < 2.0:
         recommend = "⏸️ 訊號混亂 (建議觀望避險)"
@@ -425,7 +443,7 @@ def run_monte_carlo_with_kelly(b_count, p_count, t_count, bankroll=10000, sim_co
     else:
         recommend = "⚔️ 智能反打【閒】" if is_break_active else "🔥 強勢正打【閒】"
 
-    status_msg = f"[高精準純特徵引擎啟用] 核心 EMA 勝率配比 ｜ 牌靴偏態: {macro_skew:+.1f}%"
+    status_msg = f"[高精準純特徵引擎啟用] 完全中性基準 ｜ 牌靴偏態: {macro_skew:+.1f}%"
     
     # 保持 11 個傳出參數，保證 app.py 零縫隙相容
     return 0.0, final_b_pct, final_p_pct, round(actual_t_ratio, 1), recommend, four_roads, is_break_active, consecutive_losses, status_msg, is_resonance, confidence_pct
