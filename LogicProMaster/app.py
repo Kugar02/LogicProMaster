@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from engine import run_monte_carlo_with_kelly
+from engine import run_monte_carlo_with_kelly, build_logical_columns, get_derived_road
 from drive_logger import upload_shoe_to_kugar
 
 st.set_page_config(page_title="Quantum Baccarat Dynamic OS", layout="wide", page_icon="🎲")
@@ -16,20 +16,51 @@ if 'ai_targets' not in st.session_state:
     st.session_state.ai_targets = []
 if 'total_profit' not in st.session_state:
     st.session_state.total_profit = 0.0
+if 'bet_strategy' not in st.session_state:
+    st.session_state.bet_strategy = "半凱利 (Half-Kelly Dynamic)"
+if 'base_unit' not in st.session_state:
+    st.session_state.base_unit = 100.0
+if 'stop_loss' not in st.session_state:
+    st.session_state.stop_loss = 2000.0
+if 'target_profit' not in st.session_state:
+    st.session_state.target_profit = 3000.0
 
 st.title("🎲 Quantum Baccarat Dynamic OS")
 
 # ==============================================================================
-# 2. 側邊欄資金管理與 Google Drive 備份
+# 2. 完整資金管理與策略控制面板
 # ==============================================================================
-st.sidebar.header("⚙️ 資金管理與控制")
+st.sidebar.header("⚙️ 資金管理與策略控制")
 st.session_state.bankroll = st.sidebar.number_input("💰 當前總資金 ($)", value=float(st.session_state.bankroll), step=100.0)
 
-# 顯示累計盈虧
-profit_color = "green" if st.session_state.total_profit >= 0 else "red"
-st.sidebar.markdown(f"**累計盈虧：** <span style='color:{profit_color};font-size:18px;'>${st.session_state.total_profit:+.2f}</span>", unsafe_allow_html=True)
+# 多樣化注碼策略選擇
+st.session_state.bet_strategy = st.sidebar.selectbox(
+    "🎰 資金管理策略",
+    [
+        "半凱利 (Half-Kelly Dynamic)",
+        "固定平注 (Flat Betting)",
+        "馬丁格爾倍投 (Martingale)",
+        "勝進直纜 (1-2-4-8)",
+        "自訂固定百分比 (Fixed %)"
+    ],
+    index=0
+)
 
-if st.sidebar.button("🔄 重置資金與盈虧"):
+st.session_state.base_unit = st.sidebar.number_input("💵 基礎注碼/每注基碼 ($)", value=float(st.session_state.base_unit), step=50.0)
+st.session_state.stop_loss = st.sidebar.number_input("🛑 止損門檻 ($)", value=float(st.session_state.stop_loss), step=500.0)
+st.session_state.target_profit = st.sidebar.number_input("🎯 止盈目標 ($)", value=float(st.session_state.target_profit), step=500.0)
+
+# 顯示累計盈虧與風控提醒
+profit = st.session_state.total_profit
+profit_color = "green" if profit >= 0 else "red"
+st.sidebar.markdown(f"**當前累計盈虧：** <span style='color:{profit_color};font-size:18px;font-weight:bold;'>${profit:+.2f}</span>", unsafe_allow_html=True)
+
+if profit <= -st.session_state.stop_loss:
+    st.sidebar.error("🚨 警告：已觸發止損門檻，建議停止下注離場避險！")
+elif profit >= st.session_state.target_profit:
+    st.sidebar.success("🎉 恭喜：已達到止盈目標，建議獲利結算！")
+
+if st.sidebar.button("🔄 重置資金與盈虧", use_container_width=True):
     st.session_state.total_profit = 0.0
     st.rerun()
 
@@ -42,7 +73,8 @@ if st.sidebar.button("📦 一鍵備份當前牌靴至 KUGAR", use_container_wid
             shoe_history=st.session_state.history_list,
             session_stats={
                 "bankroll": st.session_state.bankroll,
-                "total_profit": st.session_state.total_profit
+                "total_profit": st.session_state.total_profit,
+                "strategy": st.session_state.bet_strategy
             }
         )
         if success:
@@ -91,7 +123,7 @@ with col_b2:
         st.rerun()
 
 # ==============================================================================
-# 4. 核心推理引擎計算與 AI 決策顯示
+# 4. 核心推理引擎計算與下注策略換算
 # ==============================================================================
 history = st.session_state.history_list
 b_count = history.count('B')
@@ -111,22 +143,40 @@ if total_hands > 0:
     st.markdown("---")
     st.header(f"🎯 最終權重建議：{recommend}")
     
-    # ------------------ 下注統計與 Kelly 注碼計算區塊 ------------------
+    # ------------------ 注碼策略動態計算 ------------------
     win_p = max(final_b_pct, final_p_pct) / 100.0
     edge = (win_p - (1 - win_p))
     
-    if "觀望" in recommend or edge <= 0:
-        kelly_fraction = 0.0
+    if "觀望" in recommend:
         suggested_bet = 0.0
+        strat_note = "⏸️ 訊號混沌，暫不建議投注"
     else:
-        kelly_fraction = max(0.0, min(0.08, (edge / 1.0) * 0.5))
-        suggested_bet = round(st.session_state.bankroll * kelly_fraction, 0)
+        strat = st.session_state.bet_strategy
+        base_u = st.session_state.base_unit
+        
+        if strat == "半凱利 (Half-Kelly Dynamic)":
+            kelly_f = max(0.0, min(0.08, (edge / 1.0) * 0.5))
+            suggested_bet = round(st.session_state.bankroll * kelly_f, 0)
+            strat_note = f"半凱利比例: {kelly_f*100:.1f}%"
+        elif strat == "固定平注 (Flat Betting)":
+            suggested_bet = base_u
+            strat_note = f"固定平注 1 基碼 (${base_u:.0f})"
+        elif strat == "馬丁格爾倍投 (Martingale)":
+            suggested_bet = base_u * (2 ** consec_losses)
+            strat_note = f"馬丁格爾倍投 (連虧 {consec_losses} 手，{2**consec_losses} 倍)"
+        elif strat == "勝進直纜 (1-2-4-8)":
+            win_streak = 0
+            suggested_bet = base_u * (2 ** win_streak)
+            strat_note = "勝進纜模式"
+        else:
+            suggested_bet = round(st.session_state.bankroll * 0.02, 0)
+            strat_note = "自訂 2% 風控下注"
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("🔴 莊家歸一化權重", f"{final_b_pct}%")
     m2.metric("🔵 閒家歸一化權重", f"{final_p_pct}%")
     m3.metric("🎯 訊號可信度", f"{confidence_pct}%")
-    m4.metric("💵 推薦下注金額 (半凱利)", f"${suggested_bet:.0f}", help="基於當前可信度與優勢計算之 Half-Kelly 安全注碼")
+    m4.metric(f"💵 推薦注碼 ({st.session_state.bet_strategy.split()[0]})", f"${suggested_bet:.0f}", help=strat_note)
 
     if is_break_active:
         st.warning(f"⚠️ 觸發智能防禦反打機制 (連續未命中: {consec_losses} 手)")
@@ -135,7 +185,7 @@ if total_hands > 0:
 
     st.caption(markov_status)
 
-    # ------------------ 4 大核心路單診斷區塊 ------------------
+    # ------------------ 4 大核心路單診斷 ------------------
     st.markdown("### 🔍 4 大核心路單獨立診斷")
     r_cols = st.columns(4)
     for idx, (rk, rv) in enumerate(four_roads_data.items()):
@@ -146,14 +196,34 @@ if total_hands > 0:
                 st.caption(" • " + "\n • ".join(rv['details']))
 
     # ==============================================================================
-    # 5. 視覺化路紙介面 (珠盤路 & 大路矩陣)
+    # 5. 線上百家樂完整 5 路矩陣視覺化路紙 (Bead, Big, Big Eye, Small, Roach)
     # ==============================================================================
     st.markdown("---")
-    st.markdown("### 📜 視覺化路紙介面")
+    st.markdown("### 📜 線上百家樂 5 路矩陣視覺化路紙")
 
-    tab_bead, tab_big = st.tabs(["🔴🔵 珠盤路 (Bead Plate)", "📊 大路 columns (Big Road)"])
+    tab_bead, tab_big, tab_eye, tab_small, tab_roach = st.tabs([
+        "🔴🔵 珠盤路 (Bead Plate)",
+        "📊 大路 (Big Road)",
+        "🔴🔵 大眼仔路 (Big Eye Road)",
+        "🔴🔵 小路 (Small Road)",
+        "🔴🔵 曱甴路 (Cockroach Road)"
+    ])
 
-    # --- A. 珠盤路 (直向 6 格矩陣) ---
+    def build_derived_columns(derived_list):
+        cols, current_col, last_val = [], [], None
+        for val in derived_list:
+            if val != last_val:
+                if current_col:
+                    cols.append(current_col)
+                current_col = [val]
+                last_val = val
+            else:
+                current_col.append(val)
+        if current_col:
+            cols.append(current_col)
+        return cols
+
+    # --- 1. 珠盤路 ---
     with tab_bead:
         bead_rows = [[] for _ in range(6)]
         for idx, item in enumerate(history):
@@ -175,24 +245,9 @@ if total_hands > 0:
         html_table += "</table>"
         st.markdown(html_table, unsafe_allow_html=True)
 
-    # --- B. 大路矩陣 ---
+    # --- 2. 大路 ---
     with tab_big:
-        big_cols = []
-        cur_col = []
-        last_val = None
-        for item in history:
-            if item == 'T':
-                continue
-            if item != last_val:
-                if cur_col:
-                    big_cols.append(cur_col)
-                cur_col = [item]
-                last_val = item
-            else:
-                cur_col.append(item)
-        if cur_col:
-            big_cols.append(cur_col)
-
+        big_cols = build_logical_columns(history)
         display_cols = big_cols[-20:]
         if display_cols:
             max_r = max(len(c) for c in display_cols)
@@ -212,6 +267,49 @@ if total_hands > 0:
                 big_html += "</tr>"
             big_html += "</table>"
             st.markdown(big_html, unsafe_allow_html=True)
+        else:
+            st.info("大路未開出")
+
+    # 通用渲染下三路矩陣函式
+    def render_derived_road_matrix(k, road_name):
+        logical_cols = build_logical_columns(history)
+        derived = get_derived_road(logical_cols, k)
+        if not derived:
+            st.info(f"{road_name}尚未開出 (需大路達到足夠欄位)")
+            return
+        
+        d_cols = build_derived_columns(derived)
+        disp = d_cols[-20:]
+        if disp:
+            max_r = max(len(c) for c in disp)
+            grid = [["" for _ in range(len(disp))] for _ in range(max_r)]
+            for c_idx, col_data in enumerate(disp):
+                for r_idx, val in enumerate(col_data):
+                    if val == 'Red':
+                        grid[r_idx][c_idx] = "<span style='color:#E74C3C;font-weight:bold;'>🔴 紅</span>"
+                    else:
+                        grid[r_idx][c_idx] = "<span style='color:#3498DB;font-weight:bold;'>🔵 藍</span>"
+
+            html = "<table style='width:100%;text-align:center;border-collapse:collapse;'>"
+            for row in grid:
+                html += "<tr style='height:30px;'>"
+                for cell in row:
+                    html += f"<td style='border:1px solid #444;'>{cell}</td>"
+                html += "</tr>"
+            html += "</table>"
+            st.markdown(html, unsafe_allow_html=True)
+
+    # --- 3. 大眼仔路 (k=1) ---
+    with tab_eye:
+        render_derived_road_matrix(1, "大眼仔路")
+
+    # --- 4. 小路 (k=2) ---
+    with tab_small:
+        render_derived_road_matrix(2, "小路")
+
+    # --- 5. 曱甴路 (k=3) ---
+    with tab_roach:
+        render_derived_road_matrix(3, "曱甴路")
 
 st.markdown("---")
 st.write(f"📊 當前歷史記錄 (共 {total_hands} 局): ", " ".join(history[-30:]))
