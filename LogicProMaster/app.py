@@ -112,16 +112,13 @@ if total_hands > 0:
     st.header(f"🎯 最終權重建議：{recommend}")
     
     # ------------------ 下注統計與 Kelly 注碼計算區塊 ------------------
-    # 根據勝率優勢計算 Half-Kelly 下注比例
     win_p = max(final_b_pct, final_p_pct) / 100.0
     edge = (win_p - (1 - win_p))
     
-    # 若觀望或無優勢，注碼為0
     if "觀望" in recommend or edge <= 0:
         kelly_fraction = 0.0
         suggested_bet = 0.0
     else:
-        # 半凱利公式 (Half-Kelly) 避險風險控管
         kelly_fraction = max(0.0, min(0.08, (edge / 1.0) * 0.5))
         suggested_bet = round(st.session_state.bankroll * kelly_fraction, 0)
 
@@ -196,7 +193,6 @@ if total_hands > 0:
         if cur_col:
             big_cols.append(cur_col)
 
-        # 顯示最近 20 列大路
         display_cols = big_cols[-20:]
         if display_cols:
             max_r = max(len(c) for c in display_cols)
